@@ -1,0 +1,67 @@
+﻿# Python bytecode
+__pycache__/
+*.py[cod]
+*.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables and secrets
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+
+# Logs
+*.log
+logs/
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# Test and tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local data and generated outputs
+data/
+datasets/
+outputs/
+tmp/
+temp/
+
+# Model artifacts and large binaries
+*.pkl
+*.joblib
+*.h5
+*.keras
+*.onnx
+*.pt
+*.pth
+*.ckpt
+
+# Project generated output folder
+Output/
