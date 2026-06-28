@@ -49,8 +49,8 @@ _Last updated: 2026-06-29 (E3.1, E3.2, E5.3 done)_
 ### E3 — CI + import smoke tests `P0`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E3.1 Import smoke tests | ✅ | — | (pending) | found+fixed `stat_report.py` import bug |
-| E3.2 GitHub Actions workflow | ✅ | — | (pending) | core (blocking) + optional (non-blocking); CI run unverified until pushed |
+| E3.1 Import smoke tests | ✅ | — | `7ee09e1` | found+fixed `stat_report.py` import bug |
+| E3.2 GitHub Actions workflow | ✅ | — | `700e1bb` | CI verified green on push: core 3.11/3.12 (blocking) + optional (non-blocking) all ✓ |
 
 ### E4 — Decompose `stat.py` `P1`
 | Task | Status | Owner | PR / Commit | Notes |
@@ -63,7 +63,7 @@ _Last updated: 2026-06-29 (E3.1, E3.2, E5.3 done)_
 |------|--------|-------|-------------|-------|
 | E5.1 Poisson-binomial known-answer tests | ⬜ | — | — | |
 | E5.2 Ticket/portfolio scoring tests | ⬜ | — | — | |
-| E5.3 Skip-not-fail + coverage | ✅ | — | (pending) | pipeline test skips w/o model runtime; coverage wired into CI (40% baseline) |
+| E5.3 Skip-not-fail + coverage | ✅ | — | `700e1bb` | pipeline test skips w/o model runtime; coverage wired into CI (40% baseline) |
 
 ### E6 — Resolve evolutionary stub `P2`
 | Task | Status | Owner | PR / Commit | Notes |
