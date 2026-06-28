@@ -82,5 +82,5 @@ the repo root will fail to import `dynamix.*` because `src/` won't be on the pat
   (`opt_data.compute_grid_fingerprint`, `opt_state.validate_resume_or_fail`). Don't introduce
   EVAL data into fitting.
 
-- `Output/` is generated and gitignored. `6.3.0` at the repo root is a stray pip-install log,
-  not a source file. `DynaMix-python/` is an (empty) placeholder for the external DynaMix repo.
+- `Output/` is generated and gitignored. `DynaMix-python/` is an (empty) placeholder for the
+  external DynaMix repo.

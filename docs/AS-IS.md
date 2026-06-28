@@ -51,5 +51,5 @@ not a code defect. (Sibling tests `skip` in the same situation; this one asserts
 
 ## Deployment note
 
-The intended runtime is a separate Windows environment (`f:\venv\loto_dynamix`, referenced by
-the stray `6.3.0` pip log at the repo root) where the full model stack is already installed.
+The intended runtime is a separate Windows environment (a `loto_dynamix` virtualenv under
+`f:\venv\`) where the full model stack is already installed.
