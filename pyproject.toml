@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamix-lottery"
+version = "0.1.0"
+description = "DynaMix Lottery Forecasting System: multi-model forecasting, rolling-origin backtest, and conditional-probability portfolio optimization."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "nekiee13" }]
+
+# Core runtime — required for the data layer, the stat.py backtest, and the opt/ optimizer.
+# (Mirrors requirements.txt; see docs/SRS.md for the dependency surface.)
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-learn>=1.3",
+    "plotly>=5.20",
+]
+
+[project.optional-dependencies]
+# Each model family fails soft when absent (a missing dep disables that model, not the pipeline).
+milp = ["pulp>=2.7"]
+models = ["chaospy>=4.3", "torch>=2.2", "darts>=0.30"]
+gui = []  # tkinter ships with CPython; on Linux install the system package python3-tk
+dev = ["coverage>=7.0"]
+
+[project.scripts]
+# Console scripts are declared here; their targets are wired into the package in E2.2
+# (the root entrypoint scripts are moved under dynamix.entrypoints). Until then, run the
+# repo-root scripts directly (python run_cli.py, python stat.py, ...).
+dynamix-cli = "dynamix.entrypoints.run_cli:main"
+dynamix-stat = "dynamix.entrypoints.stat:main"
+dynamix-opt = "dynamix.entrypoints.orchestrator:main"
+dynamix-report = "dynamix.entrypoints.stat_report:main"
+
+[tool.setuptools.packages.find]
+# Mixed layout (to be unified in E2.2): `dynamix` is a namespace package under src/,
+# `opt` is a regular package at the repo root. Discover both, excluding tests/tools.
+where = ["src", "."]
+include = ["dynamix*", "opt*"]
+namespaces = true
+
+[tool.coverage.run]
+branch = true
+source = ["src/dynamix", "opt"]
