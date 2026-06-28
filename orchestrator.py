@@ -12,6 +12,40 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+# ----------------------------------------------------------------------
+# sys.path bootstrapping (repo root + src/) so project imports resolve.
+#   repo_root/
+#     orchestrator.py
+#     stat.py
+#     src/dynamix/...
+# ----------------------------------------------------------------------
+import importlib.util as _importlib_util
+
+REPO_ROOT = Path(__file__).resolve().parent
+SRC_DIR = REPO_ROOT / "src"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+if SRC_DIR.exists() and str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+
+def _import_project_stat_module():
+    """
+    Import the project's repo-root ``stat.py`` under an unambiguous name.
+
+    A plain ``import stat`` would resolve to the Python standard-library ``stat``
+    module (and capitalized ``Stat`` does not exist), so load our file by path.
+    """
+    stat_path = REPO_ROOT / "stat.py"
+    spec = _importlib_util.spec_from_file_location("dynamix_stat", stat_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load project stat module from {stat_path}")
+    module = _importlib_util.module_from_spec(spec)
+    sys.modules["dynamix_stat"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 from opt.opt_config import build_config, parse_args
 from opt.opt_data import compute_grid_fingerprint, list_run_ids, load_statgrid_run, resolve_slices
 from opt.opt_diagnostics import (
@@ -38,8 +72,10 @@ from opt.opt_strategies import (
 # Option B: build next-step candidate grid inside Orchestrator by reusing Stat.py forecast logic
 # These imports are intentionally inside forecast path too, but kept here for clarity.
 # If your environment lacks some forecast models, Stat.py already logs warnings and continues best-effort.
-import Data_Utils as DU  # type: ignore
-import Stat  # type: ignore
+from dynamix import data_utils as DU  # type: ignore
+
+# Repo-root stat.py loaded by path (avoids the stdlib `stat` collision).
+Stat = _import_project_stat_module()  # type: ignore
 
 
 def _fmt_hms(seconds: float) -> str:

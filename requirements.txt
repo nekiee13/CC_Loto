@@ -1,0 +1,38 @@
+# requirements.txt — DynaMix Lottery Forecasting System
+#
+# Install:  python -m pip install -r requirements.txt
+#
+# Core runtime: required by the data layer, stat.py backtest, and the opt/ optimizer.
+# These are the only deps needed for run_tests.py to pass and for the optimizer to run.
+# (numpy, scipy, joblib, etc. come transitively but are listed where directly imported.)
+pandas>=2.2
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.3
+plotly>=5.20
+
+# Optimizer MILP path (opt/opt_strategies.py). Optional: greedy fallback is used if absent.
+pulp>=2.7
+
+# ----------------------------------------------------------------------
+# Optional model families — each fails soft (a missing dep just disables
+# that model with a warning; the pipeline still runs). Uncomment as needed.
+# ----------------------------------------------------------------------
+
+# PCE-NARX model (src/dynamix/pce_narx.py).
+# Note: chaospy -> numpoly builds from C source unless a wheel exists for your
+# Python version; needs a C compiler (e.g. build-essential) if no wheel is available.
+# chaospy>=4.3
+
+# DynaMix zero-shot models (src/dynamix/dynamix_core.py).
+# Requires PyTorch plus the external DynaMix HuggingFace model package.
+# torch>=2.2
+
+# Darts deep models: GRU/LSTM/TCN/NBEATS/Transformer/TFT (src/dynamix/darts_core.py).
+# Pulls in torch / pytorch-lightning.
+# darts>=0.30
+
+# ----------------------------------------------------------------------
+# GUI (gui.py) uses tkinter, which ships with CPython but on Linux may need
+# the system package: apt install python3-tk  (not a pip dependency).
+# ----------------------------------------------------------------------
