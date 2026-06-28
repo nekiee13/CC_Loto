@@ -41,36 +41,34 @@ if SRC_DIR.exists() and str(SRC_DIR) not in sys.path:
 
 def _import_project_stat_module():
     """
-    Import the project's Stat module without colliding with stdlib `stat`.
+    Import the project's Stat module without colliding with the stdlib `stat`.
 
-    Preference:
-      1) src.dynamix.stat   (new layout)
-      2) stat               (legacy file at repo root), ONLY if it is our file.
+    Strategy:
+      1) Load the repo-root ``stat.py`` directly by file path (its actual location).
+      2) Fall back to ``src.dynamix.stat`` should a future layout move it there.
+
+    A plain ``import stat`` is avoided because it resolves to the Python
+    standard-library ``stat`` module (and capitalized ``Stat`` does not exist).
     """
-    # 1) New layout
+    import importlib.util
+
+    # 1) Repo-root stat.py, loaded by path under an unambiguous module name.
+    stat_path = REPO_ROOT / "stat.py"
+    if stat_path.is_file():
+        spec = importlib.util.spec_from_file_location("dynamix_stat", stat_path)
+        if spec is not None and spec.loader is not None:
+            module = importlib.util.module_from_spec(spec)
+            sys.modules["dynamix_stat"] = module
+            spec.loader.exec_module(module)
+            return module
+
+    # 2) Packaged-layout fallback.
     try:
         return importlib.import_module("src.dynamix.stat")
-    except Exception:
-        pass
-
-    # 2) Legacy: `stat.py` in repo root (but avoid stdlib `stat`)
-    try:
-        mod = importlib.import_module("stat")
-        mod_file = getattr(mod, "__file__", "") or ""
-        try:
-            mod_path = Path(mod_file).resolve()
-            if mod_path.name.lower() != "stat.py":
-                raise ImportError("Imported non-project 'stat' module.")
-            if REPO_ROOT.resolve() not in mod_path.parents and mod_path != (REPO_ROOT / "stat.py").resolve():
-                raise ImportError(f"Imported stdlib/foreign 'stat' from {mod_path}")
-        except Exception as e:
-            raise ImportError(f"Rejected 'stat' import ({mod_file}): {e}")
-        return mod
     except Exception as e:
         raise ImportError(
-            "Failed to import project Stat module. Expected 'src.dynamix.stat' "
-            "or legacy 'stat.py' at repo root. Last error: "
-            f"{e!r}"
+            "Failed to import project Stat module. Expected repo-root 'stat.py' "
+            f"or 'src.dynamix.stat'. Last error: {e!r}"
         )
 
 

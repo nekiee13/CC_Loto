@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29_
+_Last updated: 2026-06-29 (E3.1 done)_
 
 ---
 
@@ -17,13 +17,13 @@ _Last updated: 2026-06-29_
 |------|----------|--------|--------------|-------|
 | E1 — Honest EV/ROI + calibration scoreboard | P0 | ⬜ Todo | 0 / 4 | Highest value |
 | E2 — Packaging & import hygiene | P0 | ⬜ Todo | 0 / 3 | Removes import-bug class |
-| E3 — CI + import smoke tests | P0 | ⬜ Todo | 0 / 2 | Do first |
+| E3 — CI + import smoke tests | P0 | 🟡 In progress | 1 / 2 | E3.1 done (found+fixed stat_report) |
 | E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
 | E5 — Test analytical core + coverage | P1 | ⬜ Todo | 0 / 3 | — |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **⬜** | **0 / 21** | |
+| **Total** | | **🟡** | **1 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -49,7 +49,7 @@ _Last updated: 2026-06-29_
 ### E3 — CI + import smoke tests `P0`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E3.1 Import smoke tests | ⬜ | — | — | shared with E2.2 |
+| E3.1 Import smoke tests | ✅ | — | (pending) | found+fixed `stat_report.py` import bug |
 | E3.2 GitHub Actions workflow | ⬜ | — | — | |
 
 ### E4 — Decompose `stat.py` `P1`
@@ -95,6 +95,11 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E3.1 done** (`tests/integration/test_entrypoints_import.py`). Smoke test
+  surfaced and fixed a real bug: `stat_report.py`'s `_import_project_stat_module()` could never
+  find the repo-root `stat.py` (it relied on `import stat`, which resolves to the stdlib);
+  now loads it by file path like `orchestrator.py`. Suite: 54 tests, only the pre-existing
+  `test_full_pipeline_simulation` fails (deferred to E5.3). **1 / 21**.
 - 2026-06-29 — Plan established; **0 / 21** tasks started. Baseline at commit `1bec389`:
   `orchestrator.py` import fixed; docs (architecture, AS-IS, SRS, analysis, ROADMAP, TDD_PLAN)
   and tooling (jcodemunch code index, jdocmunch doc index, `.venv` + core deps) in place.
