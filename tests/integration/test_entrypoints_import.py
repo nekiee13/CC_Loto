@@ -74,5 +74,52 @@ class TestEntrypointsImport(unittest.TestCase):
         )
 
 
+class TestNoSysPathManipulation(unittest.TestCase):
+    """
+    E2.2 — application/library sources must not manipulate sys.path. Packaging
+    (pyproject.toml + `pip install -e .`) makes the code importable, so the per-file
+    bootstrapping that previously broke entrypoints must not reappear.
+
+    Scope: the shipped package (src/dynamix), the optimizer package (opt/), and the
+    repo-root entrypoint shims. The test harness (run_tests.py) and tests/ are excluded —
+    they may bootstrap paths so the suite runs without an editable install.
+    """
+
+    SOURCE_GLOBS = ("src/dynamix/**/*.py", "opt/**/*.py")
+    ROOT_SHIMS = ("run_cli.py", "stat.py", "orchestrator.py", "stat_report.py", "gui.py")
+    # Allowed: dynamix_core dynamically extends the path to import the *external* DynaMix
+    # model repo (DynaMix-python), extending the `dynamix` namespace with the HF model's
+    # submodules. That is optional-external-dependency loading, not the project self-bootstrap
+    # anti-pattern this test guards against.
+    EXCLUDE = {"src/dynamix/dynamix_core.py"}
+
+    def _source_files(self):
+        files = []
+        for pattern in self.SOURCE_GLOBS:
+            files.extend(REPO_ROOT.glob(pattern))
+        files.extend(REPO_ROOT / name for name in self.ROOT_SHIMS)
+        return [
+            f
+            for f in files
+            if f.is_file() and str(f.relative_to(REPO_ROOT)) not in self.EXCLUDE
+        ]
+
+    def test_no_sys_path_insert_in_sources(self) -> None:
+        offenders = []
+        for path in self._source_files():
+            for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                line = raw.strip()
+                if line.startswith("#"):
+                    continue
+                if "sys.path.insert" in line or "sys.path.append" in line:
+                    offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {line}")
+        self.assertEqual(
+            offenders,
+            [],
+            "sys.path manipulation found in application sources (use the installed "
+            "package instead):\n" + "\n".join(offenders),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -11,15 +11,22 @@ DATA.csv ──▶ stat.py ──▶ StatGrid/<run_id>/ ──▶ orchestrator.p
 
 See [docs/architecture.md](docs/architecture.md) for the full module-by-module breakdown.
 
-## Requirements
+## Requirements & install
 
-Pure Python, run directly from the repo root — there is no `pip install` step and no
-`requirements.txt`. Modules bootstrap `src/` onto `sys.path` themselves. You need a Python
-environment with at least:
+Pure Python. Install the package (editable) to make `dynamix`/`opt` importable — this replaces
+the old per-file `sys.path` bootstrapping:
 
-- **Core:** `pandas`, `numpy`, `scikit-learn`, `plotly`
-- **Optional (fail-soft, disables a feature if missing):** `torch` + the DynaMix HuggingFace
-  model package (`dynamix`), `darts` (deep models), `pulp` (MILP optimizer), `tkinter` (GUI)
+```bash
+python -m venv .venv && . .venv/bin/activate    # Python 3.11/3.12 recommended
+pip install -e .            # core; or: pip install -e .[milp]   (adds pulp MILP backend)
+```
+
+Dependency surface:
+
+- **Core:** `pandas`, `numpy`, `scipy`, `scikit-learn`, `plotly`
+- **Optional extras (fail-soft, disables a feature if missing):** `models` = `torch` + the
+  DynaMix HuggingFace model + `darts` + `chaospy` (PCE); `milp` = `pulp`; GUI needs `tkinter`
+  (system `python3-tk` on Linux).
 
 ## Input data
 

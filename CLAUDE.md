@@ -14,21 +14,31 @@ module responsibilities, and data flow.
 
 ## Commands
 
+Install once (editable) so the package is importable — entrypoints live in the package now:
+
+```bash
+pip install -e .            # or: pip install -e .[milp]   (adds the pulp MILP backend)
+```
+
 ```bash
 # Forecast a single series / all series (stage 1)
-python run_cli.py --target TS_1 --horizon 5
+python run_cli.py --target TS_1 --horizon 5   # or: dynamix-cli --target TS_1 --horizon 5
 python run_cli.py                       # batch: all series, all models
 python gui.py                           # Tkinter GUI
 
 # Backtest + export candidate grid (stage 2)
-python stat.py --statgrid-export incremental      # none|incremental|full
+python stat.py --statgrid-export incremental      # or: dynamix-stat ...  (none|incremental|full)
 python stat.py --resume latest --statgrid-export full
-python stat_report.py --checkpoint latest
+python stat_report.py --checkpoint latest         # or: dynamix-report --checkpoint latest
 
 # Optimize / forecast over StatGrid (stage 3)
-python orchestrator.py --action optimize --run-id latest --optimizer all
+python orchestrator.py --action optimize --run-id latest --optimizer all   # or: dynamix-opt ...
 python orchestrator.py --action forecast --run-id latest   # next-step tickets
 ```
+
+The repo-root `*.py` files (`run_cli.py`, `stat.py`, `orchestrator.py`, `stat_report.py`,
+`gui.py`) are **thin shims**; the implementations live in `src/dynamix/stat.py` and
+`src/dynamix/entrypoints/`. The four `dynamix-*` console scripts are equivalent entry points.
 
 ### Tests
 
@@ -68,14 +78,17 @@ the repo root will fail to import `dynamix.*` because `src/` won't be on the pat
   erroring. Preserve this pattern when touching `dynamix_core.py` / `darts_core.py` and their
   callers in `run_cli.py` / `stat.py`.
 
-- **All entrypoints bootstrap `src/` onto `sys.path` and use the src-based package import**
-  (`from dynamix import data_utils as DU`). `orchestrator.py` additionally loads the repo-root
-  `stat.py` by file path (`_import_project_stat_module`) rather than `import stat`, because a
-  plain `import stat` resolves to the Python stdlib `stat` module. Keep this pattern — do not
-  reintroduce flat/capitalized names like `import Stat` / `import Data_Utils` (they don't exist
-  under the `src/dynamix` layout and break on case-sensitive filesystems). Test helpers
-  (`tests/core_unit/test_data_utils.py`, `stat_report.py`) deliberately try multiple module
-  names; mirror that when adding tests.
+- **The project is an installable package; entrypoints live inside it.** Run `pip install -e .`
+  once, then `import dynamix.*` / `import opt.*` resolve with no `sys.path` hacks. The backtest
+  module is `dynamix.stat` (moved out of the repo root, so a plain `import stat` no longer
+  collides with the stdlib), and the CLIs are `dynamix.entrypoints.{run_cli,orchestrator,
+  stat_report,gui}`. Use `from dynamix import ...` / `from opt import ...`; do **not**
+  reintroduce per-file `sys.path.insert` bootstrapping or flat/capitalized names like
+  `import Stat` / `import Data_Utils`. `tests/integration/test_entrypoints_import.py` enforces
+  both (every entrypoint imports + no `sys.path` manipulation in application sources). The one
+  sanctioned exception is `dynamix_core.py`, which extends the path to load the *external*
+  DynaMix model repo. `run_tests.py` keeps a path bootstrap so the suite runs without an
+  editable install.
 
 - **Leakage safety** is a hard invariant in the optimizer: truth tables and the conditional
   model are fit on TRAIN steps only; resume is guarded by a grid fingerprint + config identity

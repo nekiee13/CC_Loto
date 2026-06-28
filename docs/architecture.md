@@ -4,7 +4,8 @@ DynaMix Lottery Forecasting System: a three-stage pipeline that forecasts 7 posi
 lottery series (`TS_1`..`TS_7`) per draw, backtests those forecasts into a "candidate
 grid", then runs a portfolio optimizer over the grid to select up to 5 tickets per draw.
 Pure Python; no packaging (`pip install`), no `requirements.txt` — modules are run
-directly from the repo root and resolve imports via `sys.path` bootstrapping.
+as an installable package (`pip install -e .`); the repo-root `*.py` entrypoints are thin
+shims over implementations in `src/dynamix/` (see [AS-IS.md](AS-IS.md) / the progress notes).
 
 The single input is `DATA.csv` at the repo root: `Date,TS_1..TS_7`, one row per draw event.
 
@@ -19,7 +20,8 @@ The single input is `DATA.csv` at the repo root: `Date,TS_1..TS_7`, one row per 
      dependency boundary: import failure disables Darts, it does not crash callers.
    - `data_utils.py` (load/clean/format), `plotting.py`, `constants.py`.
 
-2. **Backtest + StatGrid export** — `stat.py` (repo root). Rolling-origin backtest using
+2. **Backtest + StatGrid export** — `dynamix.stat` (`src/dynamix/stat.py`; root `stat.py` is a
+   shim). Rolling-origin backtest using
    `ProcessPoolExecutor`. For every step it exports a candidate grid row per
    (TS position × model × rounding mode) with `pred, rounded, true, hit, abs_err`, written
    as append-only gzip CSV shards under `Output/Reports/Exports/StatGrid/<run_id>/`.

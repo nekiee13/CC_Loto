@@ -29,11 +29,10 @@ gui = []  # tkinter ships with CPython; on Linux install the system package pyth
 dev = ["coverage>=7.0"]
 
 [project.scripts]
-# Console scripts are declared here; their targets are wired into the package in E2.2
-# (the root entrypoint scripts are moved under dynamix.entrypoints). Until then, run the
-# repo-root scripts directly (python run_cli.py, python stat.py, ...).
+# Entrypoints live in the package (dynamix.stat + dynamix.entrypoints.*); the repo-root
+# *.py files are thin shims kept for `python run_cli.py`-style invocation.
 dynamix-cli = "dynamix.entrypoints.run_cli:main"
-dynamix-stat = "dynamix.entrypoints.stat:main"
+dynamix-stat = "dynamix.stat:main"
 dynamix-opt = "dynamix.entrypoints.orchestrator:main"
 dynamix-report = "dynamix.entrypoints.stat_report:main"
 

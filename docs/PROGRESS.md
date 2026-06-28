@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E2.1, E3.1, E3.2, E5.3 done)_
+_Last updated: 2026-06-29 (E2.1, E2.2, E3.1, E3.2, E5.3 done)_
 
 ---
 
@@ -16,14 +16,14 @@ _Last updated: 2026-06-29 (E2.1, E3.1, E3.2, E5.3 done)_
 | Epic | Priority | Status | Done / Total | Notes |
 |------|----------|--------|--------------|-------|
 | E1 — Honest EV/ROI + calibration scoreboard | P0 | ⬜ Todo | 0 / 4 | Highest value |
-| E2 — Packaging & import hygiene | P0 | 🟡 In progress | 1 / 3 | E2.1 done (`pip install -e .` works) |
+| E2 — Packaging & import hygiene | P0 | 🟡 In progress | 2 / 3 | E2.1+E2.2 done; E2.3 (deps pin/lock + CI editable install) left |
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
 | E5 — Test analytical core + coverage | P1 | 🟡 In progress | 1 / 3 | E5.3 done; E5.1/E5.2 todo |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **4 / 21** | |
+| **Total** | | **🟡** | **5 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -43,7 +43,7 @@ _Last updated: 2026-06-29 (E2.1, E3.1, E3.2, E5.3 done)_
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
 | E2.1 `pyproject.toml` + package metadata | ✅ | — | (pending) | `pip install -e .` works; `dynamix`+`opt` import w/o path hacks; extras independent |
-| E2.2 Finish layout; entrypoint shims | ⬜ | — | — | removes load-by-path |
+| E2.2 Finish layout; entrypoint shims | ✅ | — | (pending) | stat→`dynamix.stat`, CLIs→`dynamix.entrypoints.*`, root shims; no sys.path hacks; console scripts run |
 | E2.3 Pin deps + lockfile + target Python | ⬜ | — | — | 3.11/3.12 |
 
 ### E3 — CI + import smoke tests `P0`
@@ -95,6 +95,17 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E2.2 done.** Moved entrypoints into the package: `stat.py` → `dynamix.stat`
+  (kills the `import stat` stdlib collision), and `run_cli`/`orchestrator`/`stat_report`/`gui`
+  → `dynamix.entrypoints.*`. Removed all `sys.path` bootstrapping and the orchestrator's
+  load-by-path (`_import_project_stat_module`); orchestrator now does `from dynamix import stat`.
+  Repo-root `*.py` are thin shims; four `dynamix-*` console scripts run end-to-end (`--help`
+  exit 0). New `test_no_sys_path_insert_in_sources` guards against regressions (one sanctioned
+  exception: `dynamix_core` extends the path to load the *external* DynaMix model repo). Docs
+  synced: CLAUDE.md, README.md (install step), architecture.md. Suite: 61 tests, OK (skipped=5).
+  **5 / 21**. Follow-ups: E2.3 (pin/lock deps; switch CI to `pip install -e .[milp]`); the deep
+  `SRS.md` / `architectural_and_functional_analysis.md` still describe the pre-E2.2 module
+  locations and want a refresh.
 - 2026-06-29 — **E2.1 done.** Added `pyproject.toml` (PEP 621): `dynamix-lottery` package
   discovering namespace `dynamix` (src/) + regular `opt` (root); core deps; extras
   `milp`/`models`/`gui`/`dev`; four `dynamix-*` console scripts (targets wired in E2.2).
