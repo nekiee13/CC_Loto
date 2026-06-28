@@ -247,6 +247,27 @@ class TestIntegration(unittest.TestCase):
                     results["PCE"] = fdf
                     self.assertIn("PCE_Pred", fdf.columns)
 
+        if not results:
+            # A missing optional model runtime (torch / darts / chaospy) is an
+            # environment condition, not a defect — skip. But if such a runtime IS
+            # present and still nothing was produced, that is a real regression — fail.
+            runtime_available = []
+            for _dep in ("torch", "darts", "chaospy"):
+                try:
+                    __import__(_dep)
+                    runtime_available.append(_dep)
+                except Exception:
+                    pass
+            if not runtime_available:
+                self.skipTest(
+                    "No forecasting model produced output and no model runtime "
+                    "dependency (torch/darts/chaospy) is installed."
+                )
+            self.fail(
+                f"Model runtime present ({runtime_available}) but no model produced "
+                "a forecast DataFrame."
+            )
+
         self.assertGreater(len(results), 0, "At least one model should produce results")
 
     def test_model_comparison(self) -> None:
