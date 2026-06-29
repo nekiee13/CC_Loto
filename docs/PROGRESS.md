@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E2.1, E2.2, E3.1, E3.2, E5.3 done)_
+_Last updated: 2026-06-29 (E2 epic complete; E3.1/E3.2/E5.3 done)_
 
 ---
 
@@ -16,14 +16,14 @@ _Last updated: 2026-06-29 (E2.1, E2.2, E3.1, E3.2, E5.3 done)_
 | Epic | Priority | Status | Done / Total | Notes |
 |------|----------|--------|--------------|-------|
 | E1 — Honest EV/ROI + calibration scoreboard | P0 | ⬜ Todo | 0 / 4 | Highest value |
-| E2 — Packaging & import hygiene | P0 | 🟡 In progress | 2 / 3 | E2.1+E2.2 done; E2.3 (deps pin/lock + CI editable install) left |
+| E2 — Packaging & import hygiene | P0 | ✅ Done | 3 / 3 | installable pkg, no sys.path hacks, lockfile, CI on editable install |
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
 | E5 — Test analytical core + coverage | P1 | 🟡 In progress | 1 / 3 | E5.3 done; E5.1/E5.2 todo |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **5 / 21** | |
+| **Total** | | **🟡** | **6 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -44,7 +44,7 @@ _Last updated: 2026-06-29 (E2.1, E2.2, E3.1, E3.2, E5.3 done)_
 |------|--------|-------|-------------|-------|
 | E2.1 `pyproject.toml` + package metadata | ✅ | — | (pending) | `pip install -e .` works; `dynamix`+`opt` import w/o path hacks; extras independent |
 | E2.2 Finish layout; entrypoint shims | ✅ | — | (pending) | stat→`dynamix.stat`, CLIs→`dynamix.entrypoints.*`, root shims; no sys.path hacks; console scripts run |
-| E2.3 Pin deps + lockfile + target Python | ⬜ | — | — | 3.11/3.12 |
+| E2.3 Pin deps + lockfile + target Python | ✅ | — | (pending) | `requirements.lock` (resolves fresh); CI now `pip install -e .[milp]` + lockfile job (3.11/3.12) |
 
 ### E3 — CI + import smoke tests `P0`
 | Task | Status | Owner | PR / Commit | Notes |
@@ -95,6 +95,12 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E2.3 done → Epic E2 complete (3/3).** Added `requirements.lock` (pinned
+  core + `milp` runtime; verified it resolves a full fresh install). Switched CI to the editable
+  package: `core` and `optional` jobs now `pip install -e .[milp] ...`, and a new blocking
+  `lockfile` matrix job (3.11/3.12) installs `requirements.lock` + the package and smoke-imports
+  it. `test_packaging.py` gains lockfile assertions. `requires-python >=3.11`. Suite: 61 tests,
+  OK (skipped=5). **6 / 21**. CI cross-version verification pending push.
 - 2026-06-29 — **E2.2 done.** Moved entrypoints into the package: `stat.py` → `dynamix.stat`
   (kills the `import stat` stdlib collision), and `run_cli`/`orchestrator`/`stat_report`/`gui`
   → `dynamix.entrypoints.*`. Removed all `sys.path` bootstrapping and the orchestrator's

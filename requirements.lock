@@ -1,0 +1,17 @@
+# requirements.lock — pinned, reproducible runtime install for the DynaMix package.
+# Covers core deps + the 'milp' extra (pulp). Excludes dev/build tools and the editable
+# package itself. Regenerate with: pip-compile / pip freeze after changing pyproject.toml.
+# Pins have cp311/cp312 wheels (the supported Python range, requires-python >=3.11).
+#
+joblib==1.5.3
+narwhals==2.22.1
+numpy==2.5.0
+packaging==26.2
+pandas==3.0.4
+plotly==6.8.0
+PuLP==3.3.2
+python-dateutil==2.9.0.post0
+scikit-learn==1.9.0
+scipy==1.18.0
+six==1.17.0
+threadpoolctl==3.6.0

@@ -30,16 +30,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install core dependencies
-        # NOTE: once E2 lands packaging, replace with `pip install -e .[milp]`.
+      - name: Install package (editable) + MILP extra + coverage
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pulp coverage
+          pip install -e .[milp] coverage
 
       - name: Run test suite with coverage
         run: |
           coverage run run_tests.py
-          coverage report --include="opt/*,src/dynamix/*,stat.py,orchestrator.py"
+          coverage report --include="src/dynamix/*,opt/*"
 
   optional:
     # Non-blocking job: exercises the optional-dependency layer (e.g. PCE-NARX via chaospy,
@@ -56,10 +55,36 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install core + optional (PCE / MILP) dependencies
+      - name: Install package + optional (PCE / MILP) dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pulp chaospy
+          pip install -e .[milp] chaospy
 
       - name: Run full suite including optional layer
         run: python run_tests.py --include-optional
+
+  lockfile:
+    # Blocking job: prove the committed lockfile installs on the supported Python range and
+    # that the package imports against the pinned dependency set.
+    name: Lockfile install (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install from requirements.lock + package (no deps)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install -e . --no-deps
+
+      - name: Smoke-import the package against the locked deps
+        run: python -c "import dynamix.constants, dynamix.stat, opt.opt_config; print('lock install OK')"

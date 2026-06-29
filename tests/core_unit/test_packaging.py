@@ -20,6 +20,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
+LOCKFILE = REPO_ROOT / "requirements.lock"
 
 
 def _load() -> dict:
@@ -67,6 +68,20 @@ class TestPackaging(unittest.TestCase):
         for name in ("dynamix-cli", "dynamix-stat", "dynamix-opt", "dynamix-report"):
             self.assertIn(name, scripts, f"console script {name} must be declared")
             self.assertIn(":", scripts[name], f"{name} target must be a 'module:attr' reference")
+
+    def test_lockfile_present(self) -> None:
+        # E2.3: a committed lockfile gives reproducible installs (the requires-python /
+        # supported versions are covered by test_declares_name_and_supported_python).
+        self.assertTrue(
+            LOCKFILE.is_file(), "requirements.lock must exist at the repo root"
+        )
+
+    def test_lockfile_pins_core_dependencies(self) -> None:
+        text = LOCKFILE.read_text(encoding="utf-8").lower()
+        for pkg in ("pandas==", "numpy==", "scipy==", "scikit-learn==", "plotly=="):
+            self.assertIn(
+                pkg, text, f"requirements.lock must pin {pkg.rstrip('=')} with an exact == version"
+            )
 
     def test_packages_dynamix_and_opt_discoverable(self) -> None:
         data = _load()
