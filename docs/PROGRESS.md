@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.1/E5.3 done)_
+_Last updated: 2026-06-29 (E1 + E2 + E5 epics complete; E3.1/E3.2 done)_
 
 ---
 
@@ -19,11 +19,11 @@ _Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.1/E5.3 done)_
 | E2 — Packaging & import hygiene | P0 | ✅ Done | 3 / 3 | installable pkg, no sys.path hacks, lockfile, CI on editable install |
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
-| E5 — Test analytical core + coverage | P1 | 🟡 In progress | 2 / 3 | E5.1/E5.3 done; E5.2 todo |
+| E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **11 / 21** | |
+| **Total** | | **🟡** | **12 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -62,7 +62,7 @@ _Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.1/E5.3 done)_
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
 | E5.1 Poisson-binomial known-answer tests | ✅ | — | (pending) | found+fixed bug: `H>n` returned `prod(ps)` not 0 |
-| E5.2 Ticket/portfolio scoring tests | ⬜ | — | — | |
+| E5.2 Ticket/portfolio scoring tests | ✅ | — | (pending) | known-answer tests for `score_ticket_q`/`compatibility_log_bonus`/`portfolio_q_any`/`build_ticket_pool_beam`; no defect (locks semantics) |
 | E5.3 Skip-not-fail + coverage | ✅ | — | `700e1bb` | pipeline test skips w/o model runtime; coverage wired into CI (40% baseline) |
 
 ### E6 — Resolve evolutionary stub `P2`
@@ -95,6 +95,16 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E5.2 done → Epic E5 complete (3/3).** Added `tests/optimization/test_engine_scoring.py`
+  with hand-computed known-answer tests for the scoring core: `portfolio_q_any` (`1−Π(1−q)`),
+  `compatibility_log_bonus` (pair/triple `weight·Σ log(1+count)`, and the disabled→0 path),
+  `score_ticket_q` (`clip(q·exp(bonus), 1e-9, 1−1e-9)` — verified the formula plus both clip
+  rails), and `build_ticket_pool_beam` (orders by Σ log p, respects beam width, dedupes a
+  repeated value keeping its best score). Tests inject `p_hit`/counts directly via a minimal
+  unfitted `ConditionalProbEngine` (+ hand-built `TruthHistoryTables`), so they need no
+  torch/darts/chaospy/pulp. All passed first run — the scoring math was already correct, so this
+  is a pure regression safety-net (no defect, unlike E5.1). Suite: **90 tests, OK (skipped=5)**.
+  **12 / 21**.
 - 2026-06-29 — **E5.1 done → found+fixed a real bug.** Added `tests/core_unit/test_poisson_binomial.py`
   with closed-form known-answer tests for `poisson_binomial_prob_ge` (reduces to `scipy.stats.binom.sf`
   when all p equal; exact hand cases; H<=0 and H>n boundaries). `test_H_gt_n_is_zero` failed Red:
