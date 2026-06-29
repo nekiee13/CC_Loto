@@ -73,49 +73,33 @@ import pandas as pd
 # ----------------------------------------------------------------------
 from dynamix import constants as C  # type: ignore  # noqa: E402
 from dynamix import data_utils as DU  # type: ignore  # noqa: E402
-from dynamix import dynamix_core as DCore  # type: ignore  # noqa: E402
-from dynamix import pce_narx  # type: ignore  # noqa: E402
 
-
-# ----------------------------------------------------------------------
-# Darts Core import (with explicit diagnostics)
-# - Prefer src/dynamix/darts_core.py if present.
-# - If absent/unavailable, disable darts models.
-# ----------------------------------------------------------------------
-from typing import Any as _Any  # noqa: E402
-
-DartCore: _Any
-try:
-    from dynamix import darts_core as _DartCore  # type: ignore  # noqa: E402
-
-    DartCore = _DartCore
-    HAS_DARTS_CORE: bool = True
-except Exception as e:  # noqa: BLE001
-    DartCore = None  # type: ignore[assignment]
-    HAS_DARTS_CORE = False
-    print(
-        "[STAT] WARNING: darts_core could not be imported. "
-        f"Darts models disabled. Error: {e!r}"
-    )
+# Forecast collection + candidate-grid construction (extracted to dynamix.candidate_grid in E4).
+# Re-imported here so dynamix.stat keeps exposing these names for backward compatibility.
+from dynamix.candidate_grid import (  # type: ignore  # noqa: E402
+    DartCore,
+    HAS_DARTS_CORE,
+    TS_LIST,
+    MODEL_NAMES,
+    DARTS_MODEL_TYPES,
+    WorkerError,
+    ExportRow,
+    RoundingMode,
+    ROUNDING_MODE_LABELS,
+    rounding_mode_id,
+    apply_round,
+    _is_event_mode,
+    _format_step_label,
+    _forecast_single_series,
+    collect_model_forecasts_for_step,
+    build_candidate_grid_rows,
+)
 
 
 # ----------------------------------------------------------------------
 # Configuration
 # ----------------------------------------------------------------------
-TS_LIST: List[str] = list(getattr(C, "TS_COLUMNS", []))
 MIN_STAT_HISTORY: int = int(getattr(C, "STATS_MIN_HISTORY", 50))
-
-MODEL_NAMES: List[str] = [
-    "DynaMix",
-    "PCE",
-    "GRU",
-    "LSTM",
-    "TCN",
-    "NBEATS",
-    "Transformer",
-    "TFT",
-]
-DARTS_MODEL_TYPES: List[str] = ["GRU", "LSTM", "TCN", "NBEATS", "Transformer", "TFT"]
 
 STATS_PROGRESS_EVERY_STEPS: int = int(getattr(C, "STATS_PROGRESS_EVERY_STEPS", 1))
 DEFAULT_STATS_DIR: Path = Path(getattr(C, "OUTPUT_DIR", Path("Output"))) / "Stats"
@@ -194,91 +178,9 @@ def _setup_stat_logging(log_dir: Path) -> Path:
 log = logging.getLogger("stat")
 
 
-# ----------------------------------------------------------------------
-# Mode helpers (INDEX_MODE semantics)
-# ----------------------------------------------------------------------
-def _is_event_mode() -> bool:
-    try:
-        return str(getattr(C, "INDEX_MODE", "calendar")).lower().strip() == "event"
-    except Exception:
-        return False
-
-
-def _format_step_label(dataset_index: int, step_date: Any) -> str:
-    if _is_event_mode():
-        label = f"EventIndex={int(dataset_index)}"
-        try:
-            if hasattr(step_date, "date"):
-                label += f" (Date={step_date.date()})"
-            elif step_date not in (None, "N/A"):
-                label += f" (Date={str(step_date)})"
-        except Exception:
-            pass
-        return label
-
-    try:
-        if hasattr(step_date, "strftime"):
-            return f"Date={step_date.strftime(getattr(C, 'DATE_FORMAT', '%d/%m/%Y'))}"
-    except Exception:
-        pass
-    return f"Date={step_date.isoformat()}" if hasattr(step_date, "isoformat") else f"Date={str(step_date)}"
-
-
-# ----------------------------------------------------------------------
-# Rounding modes
-# ----------------------------------------------------------------------
-class RoundingMode(Enum):
-    TRUNCATE = auto()
-    HALF_UP = auto()
-    FLOOR = auto()
-    CEIL = auto()
-    HALF_TO_EVEN = auto()
-    HALF_DOWN = auto()
-    HALF_AWAY_FROM_ZERO = auto()
-
-
-ROUNDING_MODE_LABELS: Dict[RoundingMode, str] = {
-    RoundingMode.TRUNCATE: "1 - Truncate (towards zero)",
-    RoundingMode.HALF_UP: "2 - Round half up",
-    RoundingMode.FLOOR: "3 - Floor",
-    RoundingMode.CEIL: "4 - Ceiling",
-    RoundingMode.HALF_TO_EVEN: "5 - Round half to even",
-    RoundingMode.HALF_DOWN: "6 - Round half down",
-    RoundingMode.HALF_AWAY_FROM_ZERO: "7 - Round half away from zero",
-}
-
-
-def rounding_mode_id(mode: RoundingMode) -> int:
-    return int(mode.value)
-
-
-def apply_round(value: float, mode: RoundingMode) -> int:
-    if math.isnan(value) or math.isinf(value):
-        return 0
-
-    if mode == RoundingMode.TRUNCATE:
-        return int(value)
-    if mode == RoundingMode.FLOOR:
-        return math.floor(value)
-    if mode == RoundingMode.CEIL:
-        return math.ceil(value)
-
-    d = Decimal(str(value))
-
-    if mode == RoundingMode.HALF_TO_EVEN:
-        return int(d.to_integral_value(rounding="ROUND_HALF_EVEN"))
-    if mode == RoundingMode.HALF_UP:
-        return int(d.to_integral_value(rounding=ROUND_HALF_UP))
-    if mode == RoundingMode.HALF_DOWN:
-        return int(d.to_integral_value(rounding=ROUND_HALF_DOWN))
-    if mode == RoundingMode.HALF_AWAY_FROM_ZERO:
-        if value >= 0:
-            return int(d.to_integral_value(rounding=ROUND_HALF_UP))
-        mag = -d
-        mag_rounded = mag.to_integral_value(rounding=ROUND_HALF_UP)
-        return int(-mag_rounded)
-
-    return int(round(value))
+# Mode helpers (`_is_event_mode`, `_format_step_label`) and the rounding primitives
+# (`RoundingMode`, `ROUNDING_MODE_LABELS`, `rounding_mode_id`, `apply_round`) now live in
+# dynamix.candidate_grid and are re-imported at the top of this module (E4).
 
 
 # ----------------------------------------------------------------------
@@ -290,8 +192,7 @@ HitDistribution = Dict[RoundingMode, Dict[str, Dict[int, int]]]
 OverlayDistribution = Dict[int, int]
 
 OverlayWitness = Dict[str, Any]
-WorkerError = Dict[str, Any]
-ExportRow = Dict[str, Any]
+# WorkerError / ExportRow are defined in and re-imported from dynamix.candidate_grid (E4).
 
 
 # ----------------------------------------------------------------------
@@ -542,106 +443,8 @@ class CandidateGridExporter:
         self._steps_since_flush = 0
 
 
-# ----------------------------------------------------------------------
-# Worker: univariate forecasts for a single TS (executed in subprocesses)
-# ----------------------------------------------------------------------
-def _forecast_single_series(args: Tuple[str, pd.DataFrame, int]) -> Tuple[str, Dict[str, float], List[WorkerError]]:
-    ts_name, ts_univariate_df, forecast_horizon = args
-    forecasts_for_ts: Dict[str, float] = {}
-    errors: List[WorkerError] = []
-
-    def _err(model: str, exc: BaseException) -> None:
-        errors.append(
-            {
-                "ts": ts_name,
-                "model": model,
-                "error": repr(exc),
-                "traceback": traceback.format_exc(limit=15),
-                "history_len": int(ts_univariate_df.shape[0]),
-            }
-        )
-
-    if bool(getattr(C, "STATS_ENABLE_DYNAMIX", True)):
-        try:
-            if ts_univariate_df.shape[0] > 0:
-                dm_res = DCore.run_dynamix_forecast(
-                    ts_df=ts_univariate_df,
-                    target_col=ts_name,
-                    forecast_horizon=forecast_horizon,
-                )
-                if isinstance(dm_res, dict):
-                    dm_df = dm_res.get("forecast_df")
-                    if isinstance(dm_df, pd.DataFrame) and not dm_df.empty and ts_name in dm_df.columns:
-                        forecasts_for_ts["DynaMix"] = float(dm_df[ts_name].iloc[0])
-        except Exception as e:  # noqa: BLE001
-            _err("DynaMix", e)
-
-    if bool(getattr(C, "STATS_ENABLE_PCE", True)) and bool(getattr(C, "PCE_ENABLED", True)):
-        try:
-            pce_df = pce_narx.predict_pce_narx(
-                data=ts_univariate_df,
-                target_col=ts_name,
-                forecast_horizon=forecast_horizon,
-            )
-            if isinstance(pce_df, pd.DataFrame) and not pce_df.empty and "PCE_Pred" in pce_df.columns:
-                forecasts_for_ts["PCE"] = float(pce_df["PCE_Pred"].iloc[0])
-        except Exception as e:  # noqa: BLE001
-            _err("PCE", e)
-
-    if (
-        bool(getattr(C, "STATS_ENABLE_DARTS", True))
-        and HAS_DARTS_CORE
-        and bool(getattr(C, "DARTS_ENABLED", True))
-        and DartCore is not None
-    ):
-        for model_type in DARTS_MODEL_TYPES:
-            try:
-                darts_res = DartCore.run_darts_forecast(
-                    ts_df=ts_univariate_df,
-                    target_col=ts_name,
-                    forecast_horizon=forecast_horizon,
-                    model_type=model_type,
-                )
-                if isinstance(darts_res, dict):
-                    d_df = darts_res.get("forecast_df")
-                    if isinstance(d_df, pd.DataFrame) and not d_df.empty and ts_name in d_df.columns:
-                        forecasts_for_ts[model_type] = float(d_df[ts_name].iloc[0])
-            except Exception as e:  # noqa: BLE001
-                _err(f"Darts:{model_type}", e)
-
-    return ts_name, forecasts_for_ts, errors
-
-
-# ----------------------------------------------------------------------
-# Forecast Collection (Strictly Independent + Parallel)
-# ----------------------------------------------------------------------
-def collect_model_forecasts_for_step(
-    history_df: pd.DataFrame,
-    executor: Optional[ProcessPoolExecutor],
-    forecast_horizon: int = 1,
-) -> Tuple[Dict[str, Dict[str, float]], List[WorkerError]]:
-    forecasts: Dict[str, Dict[str, float]] = {m: {} for m in MODEL_NAMES}
-    all_errors: List[WorkerError] = []
-
-    if not TS_LIST:
-        return forecasts, all_errors
-
-    args_list: List[Tuple[str, pd.DataFrame, int]] = []
-    for ts in TS_LIST:
-        ts_univariate_df = history_df[[ts]].copy()
-        args_list.append((ts, ts_univariate_df, forecast_horizon))
-
-    results_iter = executor.map(_forecast_single_series, args_list) if executor is not None else map(_forecast_single_series, args_list)
-
-    for ts_name, ts_forecasts, errs in results_iter:
-        if isinstance(errs, list) and errs:
-            all_errors.extend(errs)
-
-        for model_name, value in ts_forecasts.items():
-            if model_name in forecasts:
-                forecasts[model_name][ts_name] = value
-
-    return forecasts, all_errors
+# `_forecast_single_series` and `collect_model_forecasts_for_step` now live in
+# dynamix.candidate_grid and are re-imported at the top of this module (E4).
 
 
 # ----------------------------------------------------------------------
@@ -811,76 +614,8 @@ def update_stats_for_step(
         )
 
 
-# ----------------------------------------------------------------------
-# Build candidate grid rows for export (one step)
-# ----------------------------------------------------------------------
-def build_candidate_grid_rows(
-    *,
-    run_id: str,
-    export_mode: str,
-    model_forecasts: Dict[str, Dict[str, float]],
-    true_row: pd.Series,
-    dataset_index: int,
-    step_num: int,
-    step_date: Any,
-    effective_window: int,
-) -> List[ExportRow]:
-    rows: List[ExportRow] = []
-
-    step_label = _format_step_label(int(dataset_index), step_date)
-    try:
-        step_date_str = step_date.isoformat() if hasattr(step_date, "isoformat") else str(step_date)
-    except Exception:
-        step_date_str = str(step_date)
-
-    index_mode = "event" if _is_event_mode() else "calendar"
-
-    for ts in TS_LIST:
-        try:
-            true_val = int(true_row[ts])
-        except Exception:
-            true_val = 0
-
-        for model_name in MODEL_NAMES:
-            forecast_map = model_forecasts.get(model_name, {})
-            if not isinstance(forecast_map, dict):
-                continue
-            if ts not in forecast_map:
-                continue
-
-            try:
-                pred = float(forecast_map[ts])
-            except Exception:
-                continue
-
-            for mode in RoundingMode:
-                rid = rounding_mode_id(mode)
-                rounded = apply_round(pred, mode)
-                hit = 1 if int(rounded) == int(true_val) else 0
-                abs_err = float(abs(pred - float(true_val)))
-
-                rows.append(
-                    {
-                        "run_id": str(run_id),
-                        "dataset_index": int(dataset_index),
-                        "step_num": int(step_num),
-                        "step_label": str(step_label),
-                        "step_date": str(step_date_str),
-                        "ts": str(ts),
-                        "model": str(model_name),
-                        "rounding_id": int(rid),
-                        "pred": float(pred),
-                        "rounded": int(rounded),
-                        "true": int(true_val),
-                        "hit": int(hit),
-                        "abs_err": float(abs_err),
-                        "window_rounds": int(effective_window),
-                        "index_mode": str(index_mode),
-                        "export_mode": str(export_mode),
-                    }
-                )
-
-    return rows
+# `build_candidate_grid_rows` now lives in dynamix.candidate_grid and is re-imported at the top
+# of this module (E4).
 
 
 # ----------------------------------------------------------------------

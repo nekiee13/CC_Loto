@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E1 + E2 + E5 epics complete; E3.1/E3.2 done)_
+_Last updated: 2026-06-29 (E1 + E2 + E4 + E5 epics complete; E3.1/E3.2 done)_
 
 ---
 
@@ -18,12 +18,12 @@ _Last updated: 2026-06-29 (E1 + E2 + E5 epics complete; E3.1/E3.2 done)_
 | E1 — Honest EV/ROI + calibration scoreboard | P0 | ✅ Done | 4 / 4 | scoreboard in summary + console verdict |
 | E2 — Packaging & import hygiene | P0 | ✅ Done | 3 / 3 | installable pkg, no sys.path hacks, lockfile, CI on editable install |
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
-| E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
+| E4 — Decompose `stat.py` | P1 | ✅ Done | 2 / 2 | `dynamix.candidate_grid` extracted; golden-locked; stat re-exports |
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **12 / 21** | |
+| **Total** | | **🟡** | **14 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -55,8 +55,8 @@ _Last updated: 2026-06-29 (E1 + E2 + E5 epics complete; E3.1/E3.2 done)_
 ### E4 — Decompose `stat.py` `P1`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E4.1 Golden candidate-grid characterization test | ⬜ | — | — | before moving code |
-| E4.2 Move logic to `src/dynamix`; re-exports | ⬜ | — | — | depends on E4.1, E2 |
+| E4.1 Golden candidate-grid characterization test | ✅ | — | (pending) | committed golden JSON; locks `build_candidate_grid_rows` output before the move |
+| E4.2 Move logic to `src/dynamix`; re-exports | ✅ | — | (pending) | new `dynamix.candidate_grid`; `stat` re-exports same objects; orchestrator imports directly |
 
 ### E5 — Test analytical core + coverage `P1`
 | Task | Status | Owner | PR / Commit | Notes |
@@ -95,6 +95,19 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E4 epic complete (2/2) → `stat.py` decomposed.** E4.1: added
+  `tests/contract/test_candidate_grid_golden.py` with a committed golden JSON snapshot of
+  `build_candidate_grid_rows` (2 TS × 2 models × 7 rounding modes; preds on `.5` boundaries so all
+  seven modes differ) — a behavior lock before moving code. E4.2: extracted the forecast-collection
+  + candidate-grid logic out of the ~1600-line `dynamix.stat` god-module into a new
+  `src/dynamix/candidate_grid.py` (`RoundingMode`/`apply_round`/`rounding_mode_id`,
+  `_forecast_single_series`, `collect_model_forecasts_for_step`, `build_candidate_grid_rows`, plus
+  the fail-soft model-adapter import block and `TS_LIST`/`MODEL_NAMES`/`DARTS_MODEL_TYPES`).
+  `dynamix.stat` now re-imports every name (back-compat: `stat.X is candidate_grid.X`, verified) and
+  the orchestrator imports the collector/builder directly from the package module. New
+  `tests/integration/test_orchestrator_uses_module.py` asserts the same-object identity and no
+  load-by-path. Golden + `test_stat_logic` + the CLIs (`stat.py`/`orchestrator.py`/console scripts)
+  all green. Suite: **96 tests, OK (skipped=5)**. **14 / 21**.
 - 2026-06-29 — **E5.2 done → Epic E5 complete (3/3).** Added `tests/optimization/test_engine_scoring.py`
   with hand-computed known-answer tests for the scoring core: `portfolio_q_any` (`1−Π(1−q)`),
   `compatibility_log_bonus` (pair/triple `weight·Σ log(1+count)`, and the disabled→0 path),

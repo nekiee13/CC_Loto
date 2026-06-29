@@ -42,11 +42,14 @@ from opt.opt_strategies import (
     list_to_str,
 )
 
-# Option B: build next-step candidate grid inside Orchestrator by reusing the backtest's
-# forecast logic. If the environment lacks some forecast models, dynamix.stat logs warnings
-# and continues best-effort.
+# Option B: build next-step candidate grid inside Orchestrator by reusing the forecast-collection
+# logic (extracted to dynamix.candidate_grid in E4). If the environment lacks some forecast
+# models, the collector logs warnings and continues best-effort.
 from dynamix import data_utils as DU  # type: ignore
-from dynamix import stat as Stat  # type: ignore
+from dynamix.candidate_grid import (  # type: ignore
+    collect_model_forecasts_for_step,
+    build_candidate_grid_rows,
+)
 
 
 def _fmt_hms(seconds: float) -> str:
@@ -255,9 +258,9 @@ def _build_next_step_candidate_grid_via_stat(
     # History is all existing observations (exclusive of unknown future row)
     history_df = ts_df[cfg.ts_list].copy()
 
-    # Use Stat.py forecasting collector (best-effort; may skip models if unavailable)
+    # Use the forecast collector (best-effort; may skip models if unavailable).
     # executor=None => sequential execution in-process; 1 step only, so acceptable and avoids multiprocessing pitfalls.
-    model_forecasts, worker_errors = Stat.collect_model_forecasts_for_step(  # type: ignore[attr-defined]
+    model_forecasts, worker_errors = collect_model_forecasts_for_step(
         history_df=history_df,
         executor=None,
         forecast_horizon=int(forecast_horizon),
@@ -270,9 +273,9 @@ def _build_next_step_candidate_grid_via_stat(
     # Dummy "true" row (unknown for next step). Must provide TS keys.
     true_row = pd.Series({ts: 0 for ts in cfg.ts_list})
 
-    # Build candidate grid rows using Stat helper (ensures rounding modes consistent with Stat exports)
+    # Build candidate grid rows (ensures rounding modes consistent with StatGrid exports).
     # Many fields are not used by optimizer; still helpful for debugging.
-    rows = Stat.build_candidate_grid_rows(  # type: ignore[attr-defined]
+    rows = build_candidate_grid_rows(
         run_id="forecast",
         export_mode="forecast",
         model_forecasts=model_forecasts,
