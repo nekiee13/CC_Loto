@@ -60,10 +60,12 @@ GUI needs **tkinter**, which is not a pip package — see [§7](#7-gui-tkinter).
 
 ## 4. Reproducible install (lockfile)
 
-For an exact, pinned dependency set (CI uses this to validate installs on 3.11/3.12):
+For an exact, pinned dependency set. The lock pins the latest releases (e.g. numpy 2.5, which
+requires Python **>=3.12**), so it targets **Python 3.12+**. On 3.11, use the loose floors
+(`pip install -e .`) instead — pip will resolve 3.11-compatible versions.
 
 ```bash
-pip install -r requirements.lock      # pinned core + milp runtime
+pip install -r requirements.lock      # pinned core + milp runtime (Python 3.12+)
 pip install -e . --no-deps            # the package itself, against the locked deps
 ```
 

@@ -95,6 +95,10 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E2.3 CI fix.** First E2.3 push went red: the `lockfile` job failed on Python
+  3.11 because the lock pins numpy 2.5.0 (requires >=3.12). The lock is a 3.12+ snapshot; scoped
+  its CI job to 3.12 and documented that 3.11 uses the pyproject floors (the `core` 3.11 job
+  passed). Other jobs were green.
 - 2026-06-29 — **E2.3 done → Epic E2 complete (3/3).** Added `requirements.lock` (pinned
   core + `milp` runtime; verified it resolves a full fresh install). Switched CI to the editable
   package: `core` and `optional` jobs now `pip install -e .[milp] ...`, and a new blocking

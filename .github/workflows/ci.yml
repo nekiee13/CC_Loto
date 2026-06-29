@@ -64,14 +64,16 @@ jobs:
         run: python run_tests.py --include-optional
 
   lockfile:
-    # Blocking job: prove the committed lockfile installs on the supported Python range and
-    # that the package imports against the pinned dependency set.
+    # Blocking job: prove the committed lockfile installs and the package imports against the
+    # pinned dependency set. The lock pins the latest releases (e.g. numpy 2.5, which requires
+    # Python >=3.12), so it targets 3.12+. The 3.11 floor is still supported via pyproject's
+    # loose floors, exercised by the `core` matrix job above.
     name: Lockfile install (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
     steps:
       - uses: actions/checkout@v4
 
