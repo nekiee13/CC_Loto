@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E2 epic complete; E3.1/E3.2/E5.3 done)_
+_Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.3 done)_
 
 ---
 
@@ -15,7 +15,7 @@ _Last updated: 2026-06-29 (E2 epic complete; E3.1/E3.2/E5.3 done)_
 
 | Epic | Priority | Status | Done / Total | Notes |
 |------|----------|--------|--------------|-------|
-| E1 — Honest EV/ROI + calibration scoreboard | P0 | ⬜ Todo | 0 / 4 | Highest value |
+| E1 — Honest EV/ROI + calibration scoreboard | P0 | ✅ Done | 4 / 4 | scoreboard in summary + console verdict |
 | E2 — Packaging & import hygiene | P0 | ✅ Done | 3 / 3 | installable pkg, no sys.path hacks, lockfile, CI on editable install |
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
@@ -23,7 +23,7 @@ _Last updated: 2026-06-29 (E2 epic complete; E3.1/E3.2/E5.3 done)_
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **6 / 21** | |
+| **Total** | | **🟡** | **10 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -34,10 +34,10 @@ _Last updated: 2026-06-29 (E2 epic complete; E3.1/E3.2/E5.3 done)_
 ### E1 — Honest EV/ROI + calibration scoreboard `P0`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E1.1 Pure economics function | ⬜ | — | — | |
-| E1.2 Random-ticket control baseline | ⬜ | — | — | |
-| E1.3 `q_any` calibration on EVAL | ⬜ | — | — | |
-| E1.4 Wire scoreboard into summary + console | ⬜ | — | — | depends on E1.1–E1.3 |
+| E1.1 Pure economics function | ✅ | — | (pending) | `compute_portfolio_economics`; 4 strategy loops delegate to it |
+| E1.2 Random-ticket control baseline | ✅ | — | (pending) | `random_ticket_baseline` + `build_value_pools_from_grid` (TRAIN-only, seeded) |
+| E1.3 `q_any` calibration on EVAL | ✅ | — | (pending) | `qany_calibration` adapter reusing Brier/ECE |
+| E1.4 Wire scoreboard into summary + console | ✅ | — | (pending) | `build_strategy_scoreboard`; `scoreboard` in summary JSON; orchestrator verdict block (quiet-safe) |
 
 ### E2 — Packaging & import hygiene `P0`
 | Task | Status | Owner | PR / Commit | Notes |
@@ -95,6 +95,20 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E1 epic complete (4/4) → honest scoreboard.** The optimizer now ships a blunt
+  EV/ROI + calibration verdict. E1.1 `compute_portfolio_economics` (pure `{gross,cost,net,best_hits}`)
+  is the single source of payout math — the four strategy loops (greedy/milp/bandit/evo) now
+  delegate to it (note: `eval_summary` aggregates per-draw `profit` and never duplicated the
+  per-ticket payout math, so the dedup target was the strategy loops). E1.2 `random_ticket_baseline`
+  samples each position from TRAIN-only observed pools (`build_value_pools_from_grid`, leakage-safe,
+  seeded → deterministic) as the fair −EV control. E1.3 `qany_calibration` adapter reuses
+  Brier/ECE on `(q_any, success)` pairs. E1.4 `build_strategy_scoreboard` composes them into a
+  per-strategy `{realized_ge_H_rate, base_rate_ge_H, qany_ece, qany_brier, net_eur,
+  baseline_net_eur, edge_eur}`; `write_final_summary` writes a `scoreboard` block to the summary
+  JSON and the orchestrator prints a one-block verdict (skipped under `--quiet`, file still
+  written). New tests: `test_economics`, `test_baseline`, `test_qany_calibration` (optimization),
+  `test_final_summary_scoreboard` (contract). Suite: **76 tests, OK (skipped=5)**. No existing
+  strategy selection/diagnostics behavior changed. **10 / 21**.
 - 2026-06-29 — **E2.3 CI fix.** First E2.3 push went red: the `lockfile` job failed on Python
   3.11 because the lock pins numpy 2.5.0 (requires >=3.12). The lock is a 3.12+ snapshot; scoped
   its CI job to 3.12 and documented that 3.11 uses the pyproject floors (the `core` 3.11 job

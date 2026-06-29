@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import math
+import random
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -109,6 +110,115 @@ def list_to_str(xs: List[float], precision: int = 6) -> str:
 def realized_hits(ticket: Ticket, true_ticket: Ticket) -> int:
     n = min(len(ticket), len(true_ticket))
     return int(sum(1 for i in range(n) if int(ticket[i]) == int(true_ticket[i])))
+
+
+def compute_portfolio_economics(
+    tickets: List[Ticket],
+    true_ticket: Ticket,
+    *,
+    payout_by_hits: Dict[int, float],
+    ticket_cost_eur: float,
+) -> Dict[str, float]:
+    """Pure economics of one draw's portfolio against the realized truth.
+
+    Each ticket pays out according to its OWN realized hit count; cost is one
+    ``ticket_cost_eur`` per ticket. The single source of payout math for every strategy
+    loop and the EV/ROI scoreboard (no duplication).
+
+    Returns ``{gross_eur, cost_eur, net_eur, best_hits}`` where
+    ``net_eur == gross_eur - cost_eur`` and ``best_hits`` is the max hits over the
+    portfolio (0 if empty).
+    """
+    gross = 0.0
+    best_hits = 0
+    for t in tickets:
+        h = realized_hits(t, true_ticket)
+        if h > best_hits:
+            best_hits = h
+        gross += float(payout_by_hits.get(h, 0.0))
+    cost = float(len(tickets)) * float(ticket_cost_eur)
+    return {
+        "gross_eur": float(gross),
+        "cost_eur": float(cost),
+        "net_eur": float(gross - cost),
+        "best_hits": int(best_hits),
+    }
+
+
+def build_value_pools_from_grid(
+    grid: pd.DataFrame, ts_list: List[str], steps: Optional[List[int]] = None
+) -> Dict[str, List[int]]:
+    """Per-position pools of observed ``true`` values, drawn from TRAIN steps only.
+
+    Returns ``{ts: [observed_value, ...]}`` keeping duplicates so a uniform draw from the pool
+    reproduces the empirical (frequency-weighted) distribution. Restrict to TRAIN ``steps`` to
+    keep the baseline leakage-safe (never sample from EVAL truth).
+    """
+    df = grid
+    if steps is not None:
+        df = df[df["dataset_index"].isin(list(steps))]
+    pools: Dict[str, List[int]] = {}
+    for ts in ts_list:
+        vals = df[df["ts"] == ts]["true"]
+        pools[ts] = [int(v) for v in vals.tolist()]
+    return pools
+
+
+def sample_random_ticket(
+    rng: random.Random, value_pools: Dict[str, List[int]], ts_list: List[str]
+) -> Ticket:
+    """Sample one ticket, choosing each position uniformly from its observed-value pool."""
+    return tuple(int(rng.choice(value_pools[ts])) for ts in ts_list)
+
+
+def random_ticket_baseline(
+    cfg: OptConfig,
+    value_pools: Dict[str, List[int]],
+    *,
+    seed: int,
+    n_tickets: int,
+    n_draws: int,
+) -> Dict[str, float]:
+    """Seeded random-portfolio control: the fair negative-EV baseline a strategy must beat.
+
+    For each of ``n_draws`` simulated draws, a "true" ticket and ``n_tickets`` portfolio
+    tickets are sampled from the same per-position pools, then scored with the E1.1 economics.
+    The aggregate (summed over draws) shares the economics keys plus ``draws``/``n_tickets`` and
+    a per-draw mean. Deterministic given ``seed``.
+    """
+    rng = random.Random(int(seed))
+    ts_list = list(cfg.ts_list)
+    gross = 0.0
+    cost = 0.0
+    net = 0.0
+    best_hits = 0
+    best_hits_per_draw: List[int] = []
+    for _ in range(int(n_draws)):
+        true_ticket = sample_random_ticket(rng, value_pools, ts_list)
+        tickets = [sample_random_ticket(rng, value_pools, ts_list) for _ in range(int(n_tickets))]
+        econ = compute_portfolio_economics(
+            tickets,
+            true_ticket,
+            payout_by_hits=cfg.payout_by_hits,
+            ticket_cost_eur=cfg.ticket_cost_eur,
+        )
+        gross += econ["gross_eur"]
+        cost += econ["cost_eur"]
+        net += econ["net_eur"]
+        bh = int(econ["best_hits"])
+        best_hits_per_draw.append(bh)
+        best_hits = max(best_hits, bh)
+    n = int(n_draws)
+    return {
+        "gross_eur": float(gross),
+        "cost_eur": float(cost),
+        "net_eur": float(net),
+        "best_hits": int(best_hits),
+        "best_hits_per_draw": best_hits_per_draw,
+        "draws": int(n),
+        "n_tickets": int(n_tickets),
+        "avg_net_per_draw": float(net / n) if n > 0 else 0.0,
+    }
 
 
 def eval_summary(per_draw_rows: List[Dict[str, Any]], cfg: OptConfig) -> Dict[str, Any]:
@@ -273,15 +383,14 @@ def run_greedy(
             hit_threshold=int(base["hit_threshold"]),
         )
 
-        profits: List[float] = []
-        hits_list: List[int] = []
-        for t in tickets:
-            h = realized_hits(t, true_ticket)
-            hits_list.append(h)
-            profits.append(float(cfg.payout_by_hits.get(h, 0.0)) - float(cfg.ticket_cost_eur))
-
-        step_profit = float(sum(profits))
-        max_hits = int(max(hits_list) if hits_list else 0)
+        econ = compute_portfolio_economics(
+            tickets,
+            true_ticket,
+            payout_by_hits=cfg.payout_by_hits,
+            ticket_cost_eur=cfg.ticket_cost_eur,
+        )
+        step_profit = float(econ["net_eur"])
+        max_hits = int(econ["best_hits"])
 
         rows.append({"dataset_index": idx, "tickets": int(len(tickets)), "profit": step_profit, "max_hits": max_hits})
         diag_rows.append(
@@ -378,15 +487,14 @@ def run_milp(
             hit_threshold=int(base["hit_threshold"]),
         )
 
-        profits: List[float] = []
-        hits_list: List[int] = []
-        for t in tickets:
-            h = realized_hits(t, true_ticket)
-            hits_list.append(h)
-            profits.append(float(cfg.payout_by_hits.get(h, 0.0)) - float(cfg.ticket_cost_eur))
-
-        step_profit = float(sum(profits))
-        max_hits = int(max(hits_list) if hits_list else 0)
+        econ = compute_portfolio_economics(
+            tickets,
+            true_ticket,
+            payout_by_hits=cfg.payout_by_hits,
+            ticket_cost_eur=cfg.ticket_cost_eur,
+        )
+        step_profit = float(econ["net_eur"])
+        max_hits = int(econ["best_hits"])
 
         rows.append({"dataset_index": idx, "tickets": int(len(tickets)), "profit": step_profit, "max_hits": max_hits})
         diag_rows.append(
@@ -498,15 +606,14 @@ def run_bandit(
             hit_threshold=int(arm["hit_threshold"]),
         )
 
-        profits: List[float] = []
-        hits_list: List[int] = []
-        for t in tickets:
-            h = realized_hits(t, true_ticket)
-            hits_list.append(h)
-            profits.append(float(cfg.payout_by_hits.get(h, 0.0)) - float(cfg.ticket_cost_eur))
-
-        step_profit = float(sum(profits))
-        max_hits = int(max(hits_list) if hits_list else 0)
+        econ = compute_portfolio_economics(
+            tickets,
+            true_ticket,
+            payout_by_hits=cfg.payout_by_hits,
+            ticket_cost_eur=cfg.ticket_cost_eur,
+        )
+        step_profit = float(econ["net_eur"])
+        max_hits = int(econ["best_hits"])
         success = bool(max_hits >= int(arm["hit_threshold"]))
         if success:
             alpha[arm["name"]] = float(alpha[arm["name"]]) + 1.0
@@ -623,15 +730,14 @@ def run_evolutionary(
             hit_threshold=int(base["hit_threshold"]),
         )
 
-        profits: List[float] = []
-        hits_list: List[int] = []
-        for t in tickets:
-            h = realized_hits(t, true_ticket)
-            hits_list.append(h)
-            profits.append(float(cfg.payout_by_hits.get(h, 0.0)) - float(cfg.ticket_cost_eur))
-
-        step_profit = float(sum(profits))
-        max_hits = int(max(hits_list) if hits_list else 0)
+        econ = compute_portfolio_economics(
+            tickets,
+            true_ticket,
+            payout_by_hits=cfg.payout_by_hits,
+            ticket_cost_eur=cfg.ticket_cost_eur,
+        )
+        step_profit = float(econ["net_eur"])
+        max_hits = int(econ["best_hits"])
 
         rows.append({"dataset_index": idx, "tickets": int(len(tickets)), "profit": step_profit, "max_hits": max_hits})
         diag_rows.append(

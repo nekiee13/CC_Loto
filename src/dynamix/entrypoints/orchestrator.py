@@ -25,7 +25,14 @@ from opt.opt_features import build_truth_history_tables
 from opt.opt_state import load_state_or_init, save_state, validate_resume_or_fail
 
 # Strategy runners (optimize action)
-from opt.opt_strategies import run_bandit, run_evolutionary, run_greedy, run_milp
+from opt.opt_strategies import (
+    run_bandit,
+    run_evolutionary,
+    run_greedy,
+    run_milp,
+    build_value_pools_from_grid,
+    random_ticket_baseline,
+)
 
 # Forecast selection helpers (forecast action)
 from opt.opt_strategies import (
@@ -75,6 +82,39 @@ def _print_slice_summary(slice_info: Dict[str, Any]) -> None:
     print(f"[OPT] Slice resolved (mode={mode}):", flush=True)
     print(f"      TRAIN steps: {len(train_steps):,d} | {_first_last(train_steps)}", flush=True)
     print(f"      EVAL  steps: {len(eval_steps):,d} | {_first_last(eval_steps)}", flush=True)
+
+
+def _print_scoreboard_verdict(diag_df, baseline: Dict[str, Any], cfg) -> None:
+    """Print the honest EV/ROI + calibration verdict (E1.4). Skipped under --quiet.
+
+    The same numbers are always persisted to summary_current.json regardless of this print.
+    """
+    if bool(getattr(cfg, "quiet", False)):
+        return
+    from opt.opt_diagnostics import build_strategy_scoreboard
+
+    board = build_strategy_scoreboard(
+        diag_df, baseline=baseline, n_bins=int(getattr(cfg, "calibration_bins", 10))
+    )
+    if not board:
+        return
+
+    print("", flush=True)
+    print("[OPT] ===== SCOREBOARD (honest verdict on EVAL) =====", flush=True)
+    print(
+        "[OPT] strategy        net_eur  baseline   edge_eur   >=H rate  base_rate  q_any ECE",
+        flush=True,
+    )
+    for opt in sorted(board.keys()):
+        r = board[opt]
+        verdict = "EDGE" if r["edge_eur"] > 0.0 else "no edge"
+        print(
+            f"[OPT] {opt:<12} {r['net_eur']:9.2f} {r['baseline_net_eur']:9.2f} "
+            f"{r['edge_eur']:10.2f}  {r['realized_ge_H_rate']:8.3f} {r['base_rate_ge_H']:9.3f} "
+            f"{r['qany_ece']:9.4f}  [{verdict}]",
+            flush=True,
+        )
+    print("[OPT] ('edge_eur = net_eur - baseline_net_eur'; positive ⇒ beat the random control)", flush=True)
 
 
 def _print_slice_interpretation(*, slice_info: Dict[str, Any], cfg, steps_all: List[int]) -> None:
@@ -479,11 +519,27 @@ def _run_optimize(cfg) -> None:
     calib_df = write_calibration_current_and_history(cfg, opt_run_id, run_id, diag_df)
     print(f"[OPT] Reports written (elapsed={_fmt_hms(time.monotonic() - t_rep)})", flush=True)
 
+    # Random-ticket control baseline (E1.2): the fair -EV reference the strategies must beat.
+    # Pools are drawn from TRAIN truth only (leakage-safe); evaluated over the EVAL draws.
+    value_pools = build_value_pools_from_grid(grid, list(cfg.ts_list), steps=train_steps)
+    baseline = random_ticket_baseline(
+        cfg,
+        value_pools,
+        seed=int(cfg.seed),
+        n_tickets=int(cfg.max_tickets_per_draw),
+        n_draws=int(len(eval_steps)),
+    )
+
     # Final summary
     print("[OPT] Writing final summary...", flush=True)
     t_sum = time.monotonic()
-    write_final_summary(cfg, opt_run_id, run_id, grid_fp, slice_info, results, diag_df, calib_df)
+    write_final_summary(
+        cfg, opt_run_id, run_id, grid_fp, slice_info, results, diag_df, calib_df,
+        baseline=baseline,
+    )
     print(f"[OPT] Final summary done (elapsed={_fmt_hms(time.monotonic() - t_sum)})", flush=True)
+
+    _print_scoreboard_verdict(diag_df, baseline, cfg)
 
     print("[OPT] Done.", flush=True)
     print(f"[OPT] Results keys: {sorted(list(results.keys()))}", flush=True)

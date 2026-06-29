@@ -218,3 +218,26 @@ def compute_calibration_metrics_from_df(
         brier=brier_score(y, p),
         ece=expected_calibration_error(y, p, int(n_bins)),
     )
+
+
+def qany_calibration(
+    q_any: Sequence[float],
+    success: Sequence[int],
+    *,
+    n_bins: int = 10,
+) -> Dict[str, float]:
+    """E1.3 — Brier + ECE of predicted portfolio success (q_any) vs. realized EVAL success.
+
+    Thin adapter: assembles the per-draw (predicted q_any, realized 0/1 success) pairs and
+    delegates to ``brier_score`` / ``expected_calibration_error`` (no re-implementation).
+    Returns ``{qany_brier, qany_ece, n}``; empty input yields zeros.
+    """
+    p = np.asarray(list(q_any), dtype=float)
+    y = np.asarray(list(success), dtype=float)
+    if y.size == 0:
+        return {"qany_brier": 0.0, "qany_ece": 0.0, "n": 0}
+    return {
+        "qany_brier": brier_score(y, p),
+        "qany_ece": expected_calibration_error(y, p, int(n_bins)),
+        "n": int(y.size),
+    }
