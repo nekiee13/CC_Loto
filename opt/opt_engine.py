@@ -345,7 +345,12 @@ class ConditionalProbEngine:
     @staticmethod
     def poisson_binomial_prob_ge(ps: List[float], H: int) -> float:
         n = len(ps)
-        H = max(0, min(int(H), n))
+        H = int(H)
+        # P(hits >= H): certain for H <= 0, impossible for H > n (can't exceed n positions).
+        if H <= 0:
+            return 1.0
+        if H > n:
+            return 0.0
         dp = [0.0] * (n + 1)
         dp[0] = 1.0
         for p in ps:

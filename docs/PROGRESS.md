@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.3 done)_
+_Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.1/E5.3 done)_
 
 ---
 
@@ -19,11 +19,11 @@ _Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.3 done)_
 | E2 — Packaging & import hygiene | P0 | ✅ Done | 3 / 3 | installable pkg, no sys.path hacks, lockfile, CI on editable install |
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ⬜ Todo | 0 / 2 | Golden test first |
-| E5 — Test analytical core + coverage | P1 | 🟡 In progress | 1 / 3 | E5.3 done; E5.1/E5.2 todo |
+| E5 — Test analytical core + coverage | P1 | 🟡 In progress | 2 / 3 | E5.1/E5.3 done; E5.2 todo |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
 | E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **10 / 21** | |
+| **Total** | | **🟡** | **11 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -61,7 +61,7 @@ _Last updated: 2026-06-29 (E1 + E2 epics complete; E3.1/E3.2/E5.3 done)_
 ### E5 — Test analytical core + coverage `P1`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E5.1 Poisson-binomial known-answer tests | ⬜ | — | — | |
+| E5.1 Poisson-binomial known-answer tests | ✅ | — | (pending) | found+fixed bug: `H>n` returned `prod(ps)` not 0 |
 | E5.2 Ticket/portfolio scoring tests | ⬜ | — | — | |
 | E5.3 Skip-not-fail + coverage | ✅ | — | `700e1bb` | pipeline test skips w/o model runtime; coverage wired into CI (40% baseline) |
 
@@ -95,6 +95,14 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-06-29 — **E5.1 done → found+fixed a real bug.** Added `tests/core_unit/test_poisson_binomial.py`
+  with closed-form known-answer tests for `poisson_binomial_prob_ge` (reduces to `scipy.stats.binom.sf`
+  when all p equal; exact hand cases; H<=0 and H>n boundaries). `test_H_gt_n_is_zero` failed Red:
+  the function clamped `H = max(0, min(H, n))`, so an impossible threshold (`H>n`) returned
+  `P(>=n) = prod(ps)` (e.g. `pb([0.5,0.5,0.5], 4) → 0.125`) instead of `0.0`. Fixed the boundary
+  guards (H<=0 ⇒ 1.0, H>n ⇒ 0.0) with no change to the in-range DP. In practice `H<=n` always held
+  (H is the hit threshold ≤ #positions), so no prior result shifted; the existing bounds/monotonic
+  test and `score_ticket_q` callers are unaffected. Suite: **81 tests, OK (skipped=5)**. **11 / 21**.
 - 2026-06-29 — **E1 epic complete (4/4) → honest scoreboard.** The optimizer now ships a blunt
   EV/ROI + calibration verdict. E1.1 `compute_portfolio_economics` (pure `{gross,cost,net,best_hits}`)
   is the single source of payout math — the four strategy loops (greedy/milp/bandit/evo) now
