@@ -19,6 +19,7 @@ family with a warning rather than erroring.
 """
 from __future__ import annotations
 
+import logging
 import math
 import traceback
 from concurrent.futures import ProcessPoolExecutor
@@ -31,6 +32,8 @@ import pandas as pd
 from dynamix import constants as C  # type: ignore
 from dynamix import dynamix_core as DCore  # type: ignore
 from dynamix import pce_narx  # type: ignore
+
+log = logging.getLogger(__name__)
 
 
 # ----------------------------------------------------------------------
@@ -49,9 +52,8 @@ try:
 except Exception as e:  # noqa: BLE001
     DartCore = None  # type: ignore[assignment]
     HAS_DARTS_CORE = False
-    print(
-        "[STAT] WARNING: darts_core could not be imported. "
-        f"Darts models disabled. Error: {e!r}"
+    log.warning(
+        "darts_core could not be imported. Darts models disabled. Error: %r", e
     )
 
 

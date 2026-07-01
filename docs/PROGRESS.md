@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 done)_
+_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E8.1 done)_
 
 ---
 
@@ -22,8 +22,8 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 don
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | 🟡 Partial | 1 / 2 | E6.1 done; E6.2 optional |
 | E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
-| E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **16 / 21** | |
+| E8 — Cleanup & polish | P3 | 🟡 Partial | 1 / 4 | Anytime |
+| **Total** | | **🟡** | **17 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -79,7 +79,7 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 don
 ### E8 — Cleanup & polish `P3`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E8.1 Unify on `logging` | ⬜ | — | — | |
+| E8.1 Unify on `logging` | ✅ | — | (uncommitted) | `[OPT]`/`[STAT]` progress → module loggers; `--quiet` maps to level |
 | E8.2 Prune config aliases | ⬜ | — | — | prove non-use first |
 | E8.3 Committed artifacts | ⬜ | — | — | `DynaMix-python/`, `DATA.csv` |
 | E8.4 Scope determinism guarantee | ⬜ | — | — | SRS NFR-9 |
@@ -95,6 +95,19 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E8.1 done → long-run output unified on `logging` (E8 now 1/4).** Replaced the
+  `[OPT]` (orchestrator, 71 sites incl. multi-line) and `[STAT]` (`dynamix.stat` backtest, 10 sites;
+  `candidate_grid` darts fail-soft warning) `print()` calls with module loggers. Orchestrator gains
+  `log = logging.getLogger("dynamix.opt")` + `_setup_opt_logging(quiet)` (stdout console handler,
+  bare `%(message)s` so output is byte-identical, idempotent, `propagate=False`); `--quiet` now maps
+  to log level (INFO→WARNING, suppressing progress). `dynamix.stat` reuses its existing root logging;
+  `candidate_grid`'s import-time warning became `log.warning`. Bulk conversion done via an AST
+  transform (byte-offset splicing to survive unicode like `⇒`), stripping `flush=True`. Scope is the
+  exact `[OPT]`/`[STAT]` progress tags: `[STAT-REPORT]` in `stat_report.py` is deliberately left as
+  `print()` — it's report *content* captured to a `.txt` via `sys.stdout` redirection, not
+  level-controlled progress. Red test `tests/contract/test_logging_unified.py::test_no_bare_bracket_prints_in_sources`
+  scans `opt/` + `src/dynamix/` (regex tolerates multi-line `print(\n "[OPT]…")`; exact closing `]`
+  so `[STAT-REPORT]` is out of scope). Suite: **102 tests, OK (skipped=5)**. **17 / 21**.
 - 2026-07-01 — **E6.1 done → honesty gate for the evolutionary stub (E6 now 1/2).** `run_evolutionary`
   is a deterministic stub but was silently included in `--optimizer all`. Added an optimizer registry
   to `opt.opt_config`: `ALL_OPTIMIZERS` + `EXPERIMENTAL_OPTIMIZERS = {"evo"}`. `which_optimizers()`

@@ -911,7 +911,7 @@ def rebuild_full_export_from_checkpoint_coverage(
         total,
         exporter.export_dir,
     )
-    print(
+    log.info(
         f"[STAT] StatGrid FULL export rebuild: {total} steps "
         f"(indices {MIN_STAT_HISTORY}..{export_end_index_inclusive})."
     )
@@ -952,11 +952,11 @@ def rebuild_full_export_from_checkpoint_coverage(
         if n == 1 or n % max(1, STATS_PROGRESS_EVERY_STEPS) == 0:
             elapsed = time.time() - t0
             pct = (n / total) * 100.0
-            print(f"[STAT] Full export rebuild progress: {n}/{total} ({pct:5.1f}%) | Elapsed: {elapsed:7.1f}s")
+            log.info(f"[STAT] Full export rebuild progress: {n}/{total} ({pct:5.1f}%) | Elapsed: {elapsed:7.1f}s")
 
     exporter.flush()
     log.info("[STAT-EXPORT] FULL rebuild export completed. export_dir=%s", exporter.export_dir)
-    print("[STAT] StatGrid FULL export rebuild: DONE.")
+    log.info("[STAT] StatGrid FULL export rebuild: DONE.")
 
 
 # ----------------------------------------------------------------------
@@ -1053,20 +1053,20 @@ def run_statistics(resume_arg: Optional[str], export_mode: str, dedupe: bool = F
         return
 
     total_steps = n_obs - MIN_STAT_HISTORY
-    print(
+    log.info(
         f"[STAT] Dataset observations: {n_obs} (min history={MIN_STAT_HISTORY}). "
         f"Total forecast steps (tests) possible: {total_steps}."
     )
 
     if effective_window <= 0:
-        print("[STAT] Training window: DISABLED (full history).")
+        log.info("[STAT] Training window: DISABLED (full history).")
     else:
-        print(f"[STAT] Training window: last {effective_window} rounds.")
+        log.info(f"[STAT] Training window: last {effective_window} rounds.")
 
     if exporter is not None:
-        print(f"[STAT] Export grid: ENABLED (mode={export_mode}) -> {exporter.export_dir}")
+        log.info(f"[STAT] Export grid: ENABLED (mode={export_mode}) -> {exporter.export_dir}")
     else:
-        print(f"[STAT] Export grid: DISABLED (mode={export_mode})")
+        log.info(f"[STAT] Export grid: DISABLED (mode={export_mode})")
 
     state: Dict[str, Any] = {
         "last_step": MIN_STAT_HISTORY - 1,
@@ -1138,7 +1138,7 @@ def run_statistics(resume_arg: Optional[str], export_mode: str, dedupe: bool = F
             print_overlay_witness_report(ow, max_per_hit=None, show_multihit=False)
         return
 
-    print(
+    log.info(
         f"[STAT] Starting/Resuming backtest from dataset index {start_idx}. "
         "Independent Variable Mode: ACTIVE. Parallel per-series execution enabled."
     )
@@ -1184,7 +1184,7 @@ def run_statistics(resume_arg: Optional[str], export_mode: str, dedupe: bool = F
                 if step_num == 1 or step_num % STATS_PROGRESS_EVERY_STEPS == 0:
                     avg_time = elapsed_total / max(step_num, 1)
                     etr = avg_time * (total_steps - step_num)
-                    print(
+                    log.info(
                         f"[STAT] Step {step_num}/{total_steps} "
                         f"(dataset index={i}, {pct:5.1f}%) | "
                         f"Elapsed: {elapsed_total:7.1f}s | ETR: {etr:7.1f}s"

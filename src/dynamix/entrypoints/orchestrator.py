@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import time
 from datetime import datetime
@@ -51,6 +52,22 @@ from dynamix.candidate_grid import (  # type: ignore
     build_candidate_grid_rows,
 )
 
+# Progress/status output for long optimize/forecast runs goes through this logger (E8.1).
+# Messages carry their own "[OPT] " prefix, so the handler formatter is bare "%(message)s"
+# to keep console output identical to the previous print()s while gaining level control.
+log = logging.getLogger("dynamix.opt")
+
+
+def _setup_opt_logging(quiet: bool = False) -> None:
+    """Attach a stdout console handler and map --quiet to a log level (idempotent)."""
+    log.setLevel(logging.WARNING if quiet else logging.INFO)
+    if not any(getattr(h, "_dynamix_opt", False) for h in log.handlers):
+        h = logging.StreamHandler(sys.stdout)
+        h.setFormatter(logging.Formatter("%(message)s"))
+        h._dynamix_opt = True  # marker so repeated calls don't stack handlers
+        log.addHandler(h)
+    log.propagate = False
+
 
 def _fmt_hms(seconds: float) -> str:
     s = max(0.0, float(seconds))
@@ -64,12 +81,12 @@ def _fmt_hms(seconds: float) -> str:
 
 def _print_header(cfg) -> None:
     action = getattr(cfg, "action", "optimize")
-    print("[OPT] =============================================================", flush=True)
-    print("[OPT] Orchestrator starting", flush=True)
-    print(f"[OPT] action={action} | optimizer={cfg.optimizer} | resume={cfg.resume} | run_id={cfg.grid_run_id}", flush=True)
+    log.info("[OPT] =============================================================")
+    log.info("[OPT] Orchestrator starting")
+    log.info(f"[OPT] action={action} | optimizer={cfg.optimizer} | resume={cfg.resume} | run_id={cfg.grid_run_id}")
     if hasattr(cfg, "slice_mode"):
-        print(f"[OPT] slice_mode={cfg.slice_mode}", flush=True)
-    print("[OPT] =============================================================", flush=True)
+        log.info(f"[OPT] slice_mode={cfg.slice_mode}")
+    log.info("[OPT] =============================================================")
 
 
 def _print_slice_summary(slice_info: Dict[str, Any]) -> None:
@@ -82,9 +99,9 @@ def _print_slice_summary(slice_info: Dict[str, Any]) -> None:
             return "first=NA last=NA"
         return f"first={int(xs[0])} last={int(xs[-1])}"
 
-    print(f"[OPT] Slice resolved (mode={mode}):", flush=True)
-    print(f"      TRAIN steps: {len(train_steps):,d} | {_first_last(train_steps)}", flush=True)
-    print(f"      EVAL  steps: {len(eval_steps):,d} | {_first_last(eval_steps)}", flush=True)
+    log.info(f"[OPT] Slice resolved (mode={mode}):")
+    log.info(f"      TRAIN steps: {len(train_steps):,d} | {_first_last(train_steps)}")
+    log.info(f"      EVAL  steps: {len(eval_steps):,d} | {_first_last(eval_steps)}")
 
 
 def _print_scoreboard_verdict(diag_df, baseline: Dict[str, Any], cfg) -> None:
@@ -102,22 +119,20 @@ def _print_scoreboard_verdict(diag_df, baseline: Dict[str, Any], cfg) -> None:
     if not board:
         return
 
-    print("", flush=True)
-    print("[OPT] ===== SCOREBOARD (honest verdict on EVAL) =====", flush=True)
-    print(
-        "[OPT] strategy        net_eur  baseline   edge_eur   >=H rate  base_rate  q_any ECE",
-        flush=True,
+    log.info("")
+    log.info("[OPT] ===== SCOREBOARD (honest verdict on EVAL) =====")
+    log.info(
+        "[OPT] strategy        net_eur  baseline   edge_eur   >=H rate  base_rate  q_any ECE"
     )
     for opt in sorted(board.keys()):
         r = board[opt]
         verdict = "EDGE" if r["edge_eur"] > 0.0 else "no edge"
-        print(
+        log.info(
             f"[OPT] {opt:<12} {r['net_eur']:9.2f} {r['baseline_net_eur']:9.2f} "
             f"{r['edge_eur']:10.2f}  {r['realized_ge_H_rate']:8.3f} {r['base_rate_ge_H']:9.3f} "
-            f"{r['qany_ece']:9.4f}  [{verdict}]",
-            flush=True,
+            f"{r['qany_ece']:9.4f}  [{verdict}]"
         )
-    print("[OPT] ('edge_eur = net_eur - baseline_net_eur'; positive ⇒ beat the random control)", flush=True)
+    log.info("[OPT] ('edge_eur = net_eur - baseline_net_eur'; positive ⇒ beat the random control)")
 
 
 def _print_slice_interpretation(*, slice_info: Dict[str, Any], cfg, steps_all: List[int]) -> None:
@@ -165,9 +180,9 @@ def _print_slice_interpretation(*, slice_info: Dict[str, Any], cfg, steps_all: L
             lines.append(f"      eval_end interpreted as index={int(cfg.eval_end_step)} ⇒ {idx_le(int(cfg.eval_end_step))}")
 
     if lines:
-        print("[OPT] Slice interpretation:", flush=True)
+        log.info("[OPT] Slice interpretation:")
         for ln in lines:
-            print(ln, flush=True)
+            log.info(ln)
 
 
 def _resolve_latest_grid_run_id(cfg) -> Tuple[str, Any]:
@@ -198,23 +213,22 @@ def _fit_engine_from_grid(
     Build leakage-safe truth tables on TRAIN only and fit ConditionalProbEngine.
     Returns (engine, truth_tables).
     """
-    print("[OPT] Building truth history tables (TRAIN only, leakage-safe)...", flush=True)
+    log.info("[OPT] Building truth history tables (TRAIN only, leakage-safe)...")
     t_truth = time.monotonic()
     truth_tables = build_truth_history_tables(
         grid=grid,
         ts_list=cfg.ts_list,
         steps_ordered=sorted([int(x) for x in train_steps]),
     )
-    print(
-        f"[OPT] Truth tables built: n_steps={truth_tables.n_steps} (elapsed={_fmt_hms(time.monotonic() - t_truth)})",
-        flush=True,
+    log.info(
+        f"[OPT] Truth tables built: n_steps={truth_tables.n_steps} (elapsed={_fmt_hms(time.monotonic() - t_truth)})"
     )
 
-    print("[OPT] Fitting conditional probability model on TRAIN...", flush=True)
+    log.info("[OPT] Fitting conditional probability model on TRAIN...")
     t_fit = time.monotonic()
     engine = ConditionalProbEngine(cfg, truth_tables)
     engine.fit_on_train(grid, train_steps=train_steps)
-    print(f"[OPT] Model fit complete (elapsed={_fmt_hms(time.monotonic() - t_fit)})", flush=True)
+    log.info(f"[OPT] Model fit complete (elapsed={_fmt_hms(time.monotonic() - t_fit)})")
     return engine, truth_tables
 
 
@@ -268,7 +282,7 @@ def _build_next_step_candidate_grid_via_stat(
 
     if worker_errors:
         # Keep it explicit but non-fatal; forecast is best-effort.
-        print(f"[OPT][forecast] WARNING: worker_errors={len(worker_errors)} (some models may have failed).", flush=True)
+        log.info(f"[OPT][forecast] WARNING: worker_errors={len(worker_errors)} (some models may have failed).")
 
     # Dummy "true" row (unknown for next step). Must provide TS keys.
     true_row = pd.Series({ts: 0 for ts in cfg.ts_list})
@@ -389,15 +403,14 @@ def _run_optimize(cfg) -> None:
     # Resolve grid run id
     t1 = time.monotonic()
     run_id, cfg = _resolve_latest_grid_run_id(cfg)
-    print(f"[OPT] Grid run id resolved: {run_id} (elapsed={_fmt_hms(time.monotonic() - t1)})", flush=True)
+    log.info(f"[OPT] Grid run id resolved: {run_id} (elapsed={_fmt_hms(time.monotonic() - t1)})")
 
     # Load grid
     t_load = time.monotonic()
-    print(f"[OPT] Loading StatGrid: {cfg.exports_dir / run_id}", flush=True)
+    log.info(f"[OPT] Loading StatGrid: {cfg.exports_dir / run_id}")
     grid = load_statgrid_run(cfg, run_id)
-    print(
-        f"[OPT] Grid loaded: rows={len(grid):,d} cols={len(grid.columns):,d} (elapsed={_fmt_hms(time.monotonic() - t_load)})",
-        flush=True,
+    log.info(
+        f"[OPT] Grid loaded: rows={len(grid):,d} cols={len(grid.columns):,d} (elapsed={_fmt_hms(time.monotonic() - t_load)})"
     )
 
     # Order steps
@@ -405,9 +418,8 @@ def _run_optimize(cfg) -> None:
     steps_all = sorted(pd.unique(grid["dataset_index"]).tolist())
     if not steps_all:
         raise ValueError("Grid has no steps (dataset_index unique empty).")
-    print(
-        f"[OPT] Steps discovered: n_steps={len(steps_all):,d} min={int(steps_all[0])} max={int(steps_all[-1])} (elapsed={_fmt_hms(time.monotonic() - t_steps)})",
-        flush=True,
+    log.info(
+        f"[OPT] Steps discovered: n_steps={len(steps_all):,d} min={int(steps_all[0])} max={int(steps_all[-1])} (elapsed={_fmt_hms(time.monotonic() - t_steps)})"
     )
 
     # Resolve slices
@@ -422,7 +434,7 @@ def _run_optimize(cfg) -> None:
     )
     _print_slice_summary(slice_info)
     _print_slice_interpretation(slice_info=slice_info, cfg=cfg, steps_all=[int(x) for x in steps_all])
-    print(f"[OPT] Slicing elapsed={_fmt_hms(time.monotonic() - t_slice)}", flush=True)
+    log.info(f"[OPT] Slicing elapsed={_fmt_hms(time.monotonic() - t_slice)}")
 
     train_steps = slice_info["train_steps_dataset_index"]
     eval_steps = slice_info["eval_steps_dataset_index"]
@@ -430,21 +442,19 @@ def _run_optimize(cfg) -> None:
         raise ValueError("Evaluation slice is empty. Adjust slicing arguments.")
 
     # Fingerprint for resume safety
-    print("[OPT] Computing grid fingerprint...", flush=True)
+    log.info("[OPT] Computing grid fingerprint...")
     t_fp = time.monotonic()
     grid_fp = compute_grid_fingerprint(grid, cfg.ts_list)
-    print(
-        f"[OPT] Fingerprint computed: n_steps={grid_fp.get('n_steps')} (elapsed={_fmt_hms(time.monotonic() - t_fp)})",
-        flush=True,
+    log.info(
+        f"[OPT] Fingerprint computed: n_steps={grid_fp.get('n_steps')} (elapsed={_fmt_hms(time.monotonic() - t_fp)})"
     )
 
     # Resume or init opt state
-    print("[OPT] Loading/initializing optimizer state...", flush=True)
+    log.info("[OPT] Loading/initializing optimizer state...")
     t_state = time.monotonic()
     opt_run_id, state = load_state_or_init(cfg, run_id, grid_fp, slice_info)
-    print(
-        f"[OPT] opt_run_id={opt_run_id} | resuming={bool(state.get('resuming', False))} (elapsed={_fmt_hms(time.monotonic() - t_state)})",
-        flush=True,
+    log.info(
+        f"[OPT] opt_run_id={opt_run_id} | resuming={bool(state.get('resuming', False))} (elapsed={_fmt_hms(time.monotonic() - t_state)})"
     )
 
     # Extra safety validation (redundant but explicit)
@@ -464,19 +474,18 @@ def _run_optimize(cfg) -> None:
     state.setdefault("strategy", {})
     state["strategy"]["base_params"] = cfg.base_strategy_params()
     save_state(cfg, opt_run_id, state)
-    print("[OPT] State checkpoint saved after training.", flush=True)
+    log.info("[OPT] State checkpoint saved after training.")
 
     want = sorted(list(cfg.which_optimizers()))
-    print(f"[OPT] Optimizers selected: {want}", flush=True)
+    log.info(f"[OPT] Optimizers selected: {want}")
     experimental = sorted(cfg.experimental_optimizers_selected())
     if experimental:
-        print(
+        log.info(
             f"[OPT] WARNING: experimental/stub optimizer(s) selected: {experimental}. "
             "These are not real optimization yet (deterministic stub) and are excluded from "
-            "`--optimizer all`; results are for development only.",
-            flush=True,
+            "`--optimizer all`; results are for development only."
         )
-    print("[OPT] ------------------ Strategy execution begins ------------------", flush=True)
+    log.info("[OPT] ------------------ Strategy execution begins ------------------")
 
     t_exec = time.monotonic()
 
@@ -484,51 +493,51 @@ def _run_optimize(cfg) -> None:
     results: Dict[str, Any] = {}
 
     if "greedy" in want:
-        print("[OPT] Running: greedy", flush=True)
+        log.info("[OPT] Running: greedy")
         res = run_greedy(cfg, opt_run_id, state, grid, engine, eval_steps)
         results["greedy"] = res.summary
         all_diag_rows.extend(res.diag_rows)
         state = res.state
         save_state(cfg, opt_run_id, state)
-        print("[OPT] greedy done + checkpoint saved", flush=True)
+        log.info("[OPT] greedy done + checkpoint saved")
 
     if "milp" in want:
-        print("[OPT] Running: milp", flush=True)
+        log.info("[OPT] Running: milp")
         res = run_milp(cfg, opt_run_id, state, grid, engine, eval_steps)
         results["milp"] = res.summary
         all_diag_rows.extend(res.diag_rows)
         state = res.state
         save_state(cfg, opt_run_id, state)
-        print("[OPT] milp done + checkpoint saved", flush=True)
+        log.info("[OPT] milp done + checkpoint saved")
 
     if "bandit" in want:
-        print("[OPT] Running: bandit", flush=True)
+        log.info("[OPT] Running: bandit")
         res = run_bandit(cfg, opt_run_id, state, grid, engine, eval_steps)
         results["bandit"] = res.summary
         all_diag_rows.extend(res.diag_rows)
         state = res.state
         save_state(cfg, opt_run_id, state)
-        print("[OPT] bandit done + checkpoint saved", flush=True)
+        log.info("[OPT] bandit done + checkpoint saved")
 
     if "evo" in want:
-        print("[OPT] Running: evo", flush=True)
+        log.info("[OPT] Running: evo")
         res = run_evolutionary(cfg, opt_run_id, state, grid, engine, eval_steps, train_steps)
         results["evolutionary"] = res.summary
         all_diag_rows.extend(res.diag_rows)
         state = res.state
         save_state(cfg, opt_run_id, state)
-        print("[OPT] evo done + checkpoint saved", flush=True)
+        log.info("[OPT] evo done + checkpoint saved")
 
-    print(f"[OPT] Strategy execution finished (elapsed={_fmt_hms(time.monotonic() - t_exec)})", flush=True)
+    log.info(f"[OPT] Strategy execution finished (elapsed={_fmt_hms(time.monotonic() - t_exec)})")
 
     # Persist diagnostics + calibration reports
-    print("[OPT] Writing diagnostics (current + history)...", flush=True)
+    log.info("[OPT] Writing diagnostics (current + history)...")
     t_rep = time.monotonic()
     diag_df = write_diagnostics_current_and_history(cfg, opt_run_id, run_id, all_diag_rows)
 
-    print("[OPT] Writing calibration report (current + history)...", flush=True)
+    log.info("[OPT] Writing calibration report (current + history)...")
     calib_df = write_calibration_current_and_history(cfg, opt_run_id, run_id, diag_df)
-    print(f"[OPT] Reports written (elapsed={_fmt_hms(time.monotonic() - t_rep)})", flush=True)
+    log.info(f"[OPT] Reports written (elapsed={_fmt_hms(time.monotonic() - t_rep)})")
 
     # Random-ticket control baseline (E1.2): the fair -EV reference the strategies must beat.
     # Pools are drawn from TRAIN truth only (leakage-safe); evaluated over the EVAL draws.
@@ -542,20 +551,20 @@ def _run_optimize(cfg) -> None:
     )
 
     # Final summary
-    print("[OPT] Writing final summary...", flush=True)
+    log.info("[OPT] Writing final summary...")
     t_sum = time.monotonic()
     write_final_summary(
         cfg, opt_run_id, run_id, grid_fp, slice_info, results, diag_df, calib_df,
         baseline=baseline,
     )
-    print(f"[OPT] Final summary done (elapsed={_fmt_hms(time.monotonic() - t_sum)})", flush=True)
+    log.info(f"[OPT] Final summary done (elapsed={_fmt_hms(time.monotonic() - t_sum)})")
 
     _print_scoreboard_verdict(diag_df, baseline, cfg)
 
-    print("[OPT] Done.", flush=True)
-    print(f"[OPT] Results keys: {sorted(list(results.keys()))}", flush=True)
-    print(results, flush=True)
-    print(f"[OPT] Total elapsed={_fmt_hms(time.monotonic() - t0)}", flush=True)
+    log.info("[OPT] Done.")
+    log.info(f"[OPT] Results keys: {sorted(list(results.keys()))}")
+    log.info(results)
+    log.info(f"[OPT] Total elapsed={_fmt_hms(time.monotonic() - t0)}")
 
 
 def _run_forecast(cfg) -> None:
@@ -573,24 +582,22 @@ def _run_forecast(cfg) -> None:
     # Resolve grid run id
     t1 = time.monotonic()
     run_id, cfg = _resolve_latest_grid_run_id(cfg)
-    print(f"[OPT] Grid run id resolved: {run_id} (elapsed={_fmt_hms(time.monotonic() - t1)})", flush=True)
+    log.info(f"[OPT] Grid run id resolved: {run_id} (elapsed={_fmt_hms(time.monotonic() - t1)})")
 
     # Load grid (needed to fit conditional model and compute truth history)
     t_load = time.monotonic()
-    print(f"[OPT] Loading StatGrid: {cfg.exports_dir / run_id}", flush=True)
+    log.info(f"[OPT] Loading StatGrid: {cfg.exports_dir / run_id}")
     grid = load_statgrid_run(cfg, run_id)
-    print(
-        f"[OPT] Grid loaded: rows={len(grid):,d} cols={len(grid.columns):,d} (elapsed={_fmt_hms(time.monotonic() - t_load)})",
-        flush=True,
+    log.info(
+        f"[OPT] Grid loaded: rows={len(grid):,d} cols={len(grid.columns):,d} (elapsed={_fmt_hms(time.monotonic() - t_load)})"
     )
 
     # Steps
     steps_all = sorted(pd.unique(grid["dataset_index"]).tolist())
     if not steps_all:
         raise ValueError("Grid has no steps (dataset_index unique empty).")
-    print(
-        f"[OPT] Steps discovered: n_steps={len(steps_all):,d} min={int(steps_all[0])} max={int(steps_all[-1])}",
-        flush=True,
+    log.info(
+        f"[OPT] Steps discovered: n_steps={len(steps_all):,d} min={int(steps_all[0])} max={int(steps_all[-1])}"
     )
 
     # Resolve slices: For forecast, eval slice may be empty; we primarily need TRAIN.
@@ -610,15 +617,14 @@ def _run_forecast(cfg) -> None:
         raise ValueError("TRAIN slice is empty. Adjust slicing arguments for forecast.")
 
     # Fingerprint (still useful for state provenance)
-    print("[OPT] Computing grid fingerprint...", flush=True)
+    log.info("[OPT] Computing grid fingerprint...")
     grid_fp = compute_grid_fingerprint(grid, cfg.ts_list)
 
     # State: allow resume/latest so forecast can attach to an existing run folder
-    print("[OPT] Loading/initializing optimizer state...", flush=True)
+    log.info("[OPT] Loading/initializing optimizer state...")
     opt_run_id, state = load_state_or_init(cfg, run_id, grid_fp, slice_info)
-    print(
-        f"[OPT] opt_run_id={opt_run_id} | resuming={bool(state.get('resuming', False))}",
-        flush=True,
+    log.info(
+        f"[OPT] opt_run_id={opt_run_id} | resuming={bool(state.get('resuming', False))}"
     )
 
     # If resuming, validate identity
@@ -635,20 +641,19 @@ def _run_forecast(cfg) -> None:
     engine, _truth_tables = _fit_engine_from_grid(cfg=cfg, run_id=run_id, grid=grid, train_steps=[int(x) for x in train_steps])
 
     # Build next-step candidate grid (Option B) from current DATA.csv
-    print("[OPT][forecast] Building next-step candidate grid from DATA.csv (Option B)...", flush=True)
+    log.info("[OPT][forecast] Building next-step candidate grid from DATA.csv (Option B)...")
     t_cg = time.monotonic()
     step_df, forecast_dataset_index, n_obs = _build_next_step_candidate_grid_via_stat(cfg=cfg, forecast_horizon=1)
-    print(
+    log.info(
         f"[OPT][forecast] Candidate grid built for dataset_index={forecast_dataset_index} (n_obs={n_obs}) "
-        f"rows={len(step_df):,d} (elapsed={_fmt_hms(time.monotonic() - t_cg)})",
-        flush=True,
+        f"rows={len(step_df):,d} (elapsed={_fmt_hms(time.monotonic() - t_cg)})"
     )
 
     # Generate tickets
-    print("[OPT][forecast] Selecting tickets...", flush=True)
+    log.info("[OPT][forecast] Selecting tickets...")
     t_sel = time.monotonic()
     report = _forecast_tickets(cfg=cfg, engine=engine, step_df=step_df, forecast_dataset_index=forecast_dataset_index)
-    print(f"[OPT][forecast] Ticket selection done (elapsed={_fmt_hms(time.monotonic() - t_sel)})", flush=True)
+    log.info(f"[OPT][forecast] Ticket selection done (elapsed={_fmt_hms(time.monotonic() - t_sel)})")
 
     # Attach provenance
     report["grid_run_id"] = str(run_id)
@@ -669,20 +674,21 @@ def _run_forecast(cfg) -> None:
     save_state(cfg, opt_run_id, state)
 
     # Console output (operator-friendly)
-    print("[OPT][forecast] -------------------------------------------------------------", flush=True)
-    print(f"[OPT][forecast] NEXT STEP dataset_index={forecast_dataset_index}", flush=True)
-    print(f"[OPT][forecast] tickets_count={report['tickets_count']} max_tickets={report['max_tickets']}", flush=True)
-    print(f"[OPT][forecast] tickets: {report['tickets_str']}", flush=True)
-    print(f"[OPT][forecast] q_any={report['q_any']:.6f} | q_per_ticket={report['q_per_ticket_str']}", flush=True)
-    print(f"[OPT][forecast] report_path={out_path}", flush=True)
-    print("[OPT][forecast] -------------------------------------------------------------", flush=True)
-    print(f"[OPT] Total elapsed={_fmt_hms(time.monotonic() - t0)}", flush=True)
+    log.info("[OPT][forecast] -------------------------------------------------------------")
+    log.info(f"[OPT][forecast] NEXT STEP dataset_index={forecast_dataset_index}")
+    log.info(f"[OPT][forecast] tickets_count={report['tickets_count']} max_tickets={report['max_tickets']}")
+    log.info(f"[OPT][forecast] tickets: {report['tickets_str']}")
+    log.info(f"[OPT][forecast] q_any={report['q_any']:.6f} | q_per_ticket={report['q_per_ticket_str']}")
+    log.info(f"[OPT][forecast] report_path={out_path}")
+    log.info("[OPT][forecast] -------------------------------------------------------------")
+    log.info(f"[OPT] Total elapsed={_fmt_hms(time.monotonic() - t0)}")
 
 
 def main() -> None:
     args = parse_args()
     cfg = build_config(args)
 
+    _setup_opt_logging(bool(getattr(cfg, "quiet", False)))
     _print_header(cfg)
 
     action = str(getattr(cfg, "action", "optimize") or "optimize").strip().lower()
@@ -699,5 +705,5 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n[OPT] Interrupted.", flush=True)
+        log.info("\n[OPT] Interrupted.")
         sys.exit(130)
