@@ -46,10 +46,11 @@ LAYER_DIRS = {
     "optimization-core": "tests/optimization",
     "state-integrity": "tests/state_integrity",
     "integration": "tests/integration",
+    "webapp": "tests/webapp",
     "optional": "tests/optional",
 }
 
-DEFAULT_LAYERS = ["core-unit", "contract", "optimization-core", "state-integrity", "integration"]
+DEFAULT_LAYERS = ["core-unit", "contract", "optimization-core", "state-integrity", "integration", "webapp"]
 
 
 # ----------------------------------------------------------------------

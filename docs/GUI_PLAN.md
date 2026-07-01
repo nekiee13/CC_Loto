@@ -28,8 +28,9 @@ single-series, charts/exports (listed at the end as a backlog).
 - The runner invokes CLIs as `"<python> -u -m <module> <flags>"` with `cwd=REPO_ROOT` so output
   streams live and paths resolve. Modules: `dynamix.stat`, `dynamix.entrypoints.orchestrator`,
   `dynamix.entrypoints.stat_report`, `dynamix.entrypoints.run_cli`.
-- Helper tests live under `tests/webapp/` (new layer folder) or `tests/core_unit`; they must not
-  import `streamlit` (keep logic import-light so the suite runs without the `[gui]` extra).
+- Helper tests live under `tests/webapp/`, registered as the `webapp` layer in `run_tests.py` and
+  included in the default layers; they must not import `streamlit` (keep logic import-light so the
+  suite runs without the `[gui]` extra).
 - No changes to `opt/`, `dynamix.stat`, or the entrypoints' behavior.
 
 ---
@@ -70,7 +71,7 @@ placeholder Project-Status panel. Wire empty page functions. **Why.** A navigabl
 
 ---
 
-# EPIC G2 — Project status & guardrails
+# EPIC G2 — Project status & guardrails  ✅
 `priority:P0` · `type:feature`
 
 **What.** A read-only "where am I" reader plus a Home page that tells the user the next step in plain
@@ -80,8 +81,8 @@ exact errors listed in the manual's Troubleshooting section.
 **Definition of done.** The Home page always shows draw count, last draw date, latest training run +
 date, latest forecast, and install status — and names the next action.
 
-### Task G2.1 — `state.py` project-status reader (pure)
-`type:feature` · `layer:core_unit` · `effort:M`
+### Task G2.1 — `state.py` project-status reader (pure) ✅
+`type:feature` · `layer:webapp` · `effort:M`
 **What.** Pure functions returning a `ProjectStatus` dataclass: DATA.csv exists + row count + last
 date; latest StatGrid run id + folder mtime; latest `forecast.json` path + mtime; booleans for
 `models_installed` (torch/darts/chaospy importable) and `milp_installed` (pulp). Reads paths from
@@ -94,7 +95,7 @@ date; latest StatGrid run id + folder mtime; latest `forecast.json` path + mtime
 - [ ] Correct counts/dates on a seeded fixture; empty/missing paths never raise.
 - [ ] `latest_statgrid_run()` matches `orchestrator._resolve_latest_grid_run_id` semantics.
 
-### Task G2.2 — Home page + status panel + guardrails
+### Task G2.2 — Home page + status panel + guardrails ✅
 `type:feature` · `layer:ui` · `effort:M`
 **What.** Render the status as traffic lights in the sidebar; a Home page with a plain-language
 "Next step" (e.g., *no StatGrid → "Do a full training (Train page)"*). Guardrail banners: models
@@ -293,6 +294,17 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Epic G2 complete (G2.1 + G2.2 ✅).** Added `dynamix.webapp.state` — pure,
+  Streamlit-free readers: `data_status` (draws + last date), `latest_statgrid_run` (newest by
+  sorted name, matching the orchestrator), `latest_forecast` (newest `forecast.json` by mtime),
+  `deps_installed` (models = any of torch/darts/chaospy importable; milp = pulp), and
+  `read_project_status()` → a `ProjectStatus` dataclass with `has_training`/`has_forecast` and a
+  plain-language `next_step()`. Registered a new **`webapp`** test layer in `run_tests.py` (in the
+  default set); Red→Green `tests/webapp/test_state.py` (6 tests over temp dirs; asserts logic stays
+  Streamlit-free). Wired the Home page + sidebar status panel (traffic lights) + guardrail banners
+  (no-data info, models-missing warning) to the reader. **Live-verified** via `AppTest`: Home shows
+  the real status (562 draws, last draw date, "no training", models-missing warning, correct next
+  step) and all pages navigate. Suite: **120 tests, OK (skipped=5)**.
 - 2026-07-01 — **Epic G1 complete (G1.1 + G1.2 ✅).** Added the `src/dynamix/webapp/` package
   (`__init__.py`, `launch.py`, `app.py`), a repo-root `app.py` shim, the `dynamix-gui` console
   script, and `streamlit>=1.36` in the `[gui]` extra. `launch.py` shells `python -m streamlit run
