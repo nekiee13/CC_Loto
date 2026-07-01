@@ -202,8 +202,14 @@ on the intended Windows runtime; portable to Linux/macOS subject to dependency a
 - **NFR-8** Export and checkpoint flushing shall be incremental to bound memory.
 
 ### 5.3 Determinism & reproducibility
-- **NFR-9** Given identical inputs and configuration, optimizer outputs shall be reproducible
-  (fixed seeds, deterministic feature ordering, deterministic fill-to-K).
+- **NFR-9** **Scope: the optimizer (Stage 3) only.** Given an identical candidate grid (StatGrid)
+  and identical configuration, optimizer outputs shall be reproducible (fixed seeds, deterministic
+  feature ordering, deterministic fill-to-K). This guarantee does **not** extend to Stage-1
+  forecasting or the Stage-2 backtest: the neural models (torch) and the multiprocessing forecast
+  workers are **not** bit-reproducible across runs, hardware, or thread counts, so the StatGrid
+  itself is treated as a fixed *input* to the reproducibility claim rather than a reproducible
+  *output*. Enforced by `tests/integration/test_optimizer_determinism.py` (asserts optimizer
+  determinism only).
 - **NFR-10** All results shall carry provenance (run ids, fingerprint, slice interpretation,
   config identity).
 

@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E8.1/E8.2/E8.3 done)_
+_Last updated: 2026-07-01 (E1 + E2 + E3 + E4 + E5 + E7 + E8 complete; E6.1 done — only optional E6.2 remains)_
 
 ---
 
@@ -22,8 +22,8 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | 🟡 Partial | 1 / 2 | E6.1 done; E6.2 optional |
 | E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
-| E8 — Cleanup & polish | P3 | 🟡 Partial | 3 / 4 | Anytime |
-| **Total** | | **🟡** | **19 / 21** | |
+| E8 — Cleanup & polish | P3 | ✅ Done | 4 / 4 | Anytime |
+| **Total** | | **🟢** | **20 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -82,7 +82,7 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E
 | E8.1 Unify on `logging` | ✅ | — | (uncommitted) | `[OPT]`/`[STAT]` progress → module loggers; `--quiet` maps to level |
 | E8.2 Prune config aliases | ✅ | — | (uncommitted) | removed PROJECT_ROOT/OUTPUT_PLOTS_DIR/DARTS_EPOCHS; readers repointed to canonical |
 | E8.3 Committed artifacts | ✅ | — | (uncommitted) | untracked DynaMix-python gitlink + gitignore + README; DATA.csv kept, policy stated |
-| E8.4 Scope determinism guarantee | ⬜ | — | — | SRS NFR-9 |
+| E8.4 Scope determinism guarantee | ✅ | — | (uncommitted) | NFR-9 scoped to optimizer; determinism integration test |
 
 ---
 
@@ -95,6 +95,18 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E8.4 done → Epic E8 complete (4/4); determinism claim scoped.** Reworded SRS
+  **NFR-9** to scope reproducibility to the **optimizer (Stage 3) only**: given an identical
+  candidate grid + config, optimizer outputs are reproducible (fixed seeds, deterministic feature
+  ordering, deterministic fill-to-K), but the claim explicitly does **not** cover Stage-1
+  forecasting or the Stage-2 backtest — torch models + multiprocessing workers are not
+  bit-reproducible, so the StatGrid is a fixed *input* to the guarantee, not a reproducible
+  *output*. Added `tests/integration/test_optimizer_determinism.py`: runs the real optimizer path
+  (grid → truth tables → conditional-prob engine → greedy) twice over a deterministically-generated
+  synthetic StatGrid and asserts identical `summary` + byte-identical `diag_rows`; plus a seeded
+  random-baseline check (same seed reproduces exactly; different seed differs). Torch-free (reuses
+  the `tests/_builders` synthetic grid + `TestOptConfig` harness). Suite: **109 tests, OK (skipped=5)**.
+  **20 / 21** (only optional E6.2 remains).
 - 2026-07-01 — **E8.3 done → committed-artifact hygiene (E8 now 3/4).** `DynaMix-python/` was
   committed as a *dangling gitlink* (git mode `160000`, a submodule pointer) with no `.gitmodules`
   — cloning produced a confusing empty submodule whose commit couldn't resolve. Untracked it
