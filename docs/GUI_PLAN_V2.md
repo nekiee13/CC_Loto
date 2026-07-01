@@ -6,6 +6,9 @@ and polish. Same principles: the GUI **wraps the existing CLIs** as subprocesses
 reimplements no pipeline logic. All non-UI logic lives in pure, Streamlit-free helpers unit-tested
 by the `webapp` layer; Streamlit views are thin and validated by per-task `AppTest` checks.
 
+**Status: v2 COMPLETE ✅ (all 5 epics V1–V5).** V1–V4 built; V5 resolved as "keep both". The GUI now
+covers the full CLI surface, click-driven. Suite: 163 tests, OK.
+
 ## How to use this plan
 
 - One task at a time, Red → Green (→ Refactor) where there is testable logic.
@@ -120,7 +123,7 @@ when models are missing (output will be `N/A`).
 
 ---
 
-# EPIC V4 — Charts & exports
+# EPIC V4 — Charts & exports  ✅
 `priority:P3` · `type:feature`
 
 **What.** Add simple charts (calibration reliability, ROI/edge per optimizer) and richer downloads.
@@ -130,7 +133,7 @@ when models are missing (output will be `N/A`).
 **Definition of done.** The Optimize page (and Home) show at least one chart derived from the
 written diagnostics, with a download.
 
-### Task V4.1 — Diagnostics/calibration readers (pure)
+### Task V4.1 — Diagnostics/calibration readers (pure) ✅
 `type:feature` · `layer:webapp` · `effort:M`
 **What.** Pure readers turning the written diagnostics/calibration files into tidy DataFrames
 (reliability bins; per-optimizer edge history).
@@ -138,7 +141,7 @@ written diagnostics, with a download.
 **Acceptance criteria**
 - [ ] Sample diagnostics parse to the expected frames; missing files degrade to empty.
 
-### Task V4.2 — Charts on the Optimize/Home pages
+### Task V4.2 — Charts on the Optimize/Home pages ✅
 `type:feature` · `layer:ui` · `effort:M`
 **What.** Render a reliability curve and an edge-per-optimizer bar chart (Streamlit/Plotly) from
 V4.1; add CSV/PNG downloads.
@@ -147,7 +150,7 @@ V4.1; add CSV/PNG downloads.
 
 ---
 
-# EPIC V5 — Retire Tkinter *(decision-gated)*
+# EPIC V5 — Retire Tkinter *(decision-gated)*  ✅ (Resolved: keep both)
 `priority:P3` · `type:chore`
 
 **What.** Once Streamlit covers the workflow, either (a) redirect `gui.py` / the launcher to the
@@ -158,7 +161,7 @@ working feature.
 
 **Definition of done.** A single, documented GUI path; the manual/README reflect the decision.
 
-### Task V5.1 — Decision + redirect/removal
+### Task V5.1 — Decision + redirect/removal ✅ (Decision: keep both — no removal)
 `type:chore` · `layer:contract` · `effort:S`
 **What.** On approval: repoint `python gui.py` (and/or the `gui` entry) to Streamlit, or delete the
 Tkinter app; update `User_manual.md` §12 and README to name a single GUI.
@@ -185,6 +188,22 @@ v1 (done) ─▶ V1 (optimize+score) ─▶ V4 (charts)
 
 ## Progress log
 
+- 2026-07-01 — **Epic V5 resolved → v2 GUI plan DONE (all 5 epics).** User decided **keep both** GUIs:
+  no code removed; the legacy Tkinter GUI (`python gui.py`) and the Streamlit GUI (`dynamix-gui`)
+  coexist (both already documented in the manual §12 + README). v2 is complete — the Streamlit GUI
+  now covers the whole workflow plus Optimize & Score, Reports, Single-series, and charts, all
+  click-driven and equivalent to the CLI.
+- 2026-07-01 — **Epic V4 complete (V4.1 + V4.2 ✅).** Added `dynamix.webapp.charts_data` — pure,
+  Streamlit-free `load_calibration(path)` (reads `calibration_current.csv`: `optimizer,
+  hit_threshold, bin_lo, bin_hi, n, empirical, avg_p`; numeric-coerced; missing → empty frame with
+  the expected columns), `reliability_curve(df, optimizer, hit_threshold)` (tidy `(avg_p, empirical)`
+  sorted), and a `latest_calibration()` locator. Red→Green `tests/webapp/test_charts_data.py`
+  (4 tests). Added charts to the Optimize page's scoreboard renderer: an **edge-per-optimizer bar
+  chart** (from the scoreboard) and a **reliability curve** (observed vs a "perfect" diagonal, with
+  an optimizer selector), plus a calibration CSV download. **Live-verified** via `AppTest` over temp
+  `DYNAMIX_OUTPUT_DIR` (summary + calibration present): the page renders with no exception and both
+  chart subheaders ("Edge per optimizer (EUR)", "Reliability (calibration)") appear. Suite:
+  **163 tests, OK (skipped=5)**. Only V5 (retire Tkinter, decision-gated) remains.
 - 2026-07-01 — **Epic V2 complete (V2.1 + V2.2 ✅).** Added `dynamix.webapp.report_io` — pure,
   Streamlit-free `latest_report(reports_dir)` (newest `report_*.txt` under `Output/Reports/` by
   mtime, ignoring non-report files) and `read_report(path)`; missing dir/file → `None`. Red→Green
@@ -219,7 +238,8 @@ v1 (done) ─▶ V1 (optimize+score) ─▶ V4 (charts)
   the scoreboard (`Optimizer … edge_eur, verdict` with EDGE/no-edge) and the "beat the random
   control" banner. Suite: **155 tests, OK (skipped=5)**.
 
-## Open decision
+## Resolved decision
 
-- **V5 (retire Tkinter)** needs your call: keep both GUIs, redirect Tkinter → Streamlit, or remove
-  Tkinter. Default until you decide: **keep both** (no change).
+- **V5 (retire Tkinter):** user chose **keep both** (2026-07-01). No code removed; the legacy Tkinter
+  GUI (`python gui.py`) and the Streamlit GUI (`dynamix-gui`) coexist. The manual (§12) and README
+  already document both. Can be revisited later.

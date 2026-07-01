@@ -18,6 +18,7 @@ from typing import Callable, Dict, Optional
 import pandas as pd
 import streamlit as st
 
+from dynamix.webapp import charts_data
 from dynamix.webapp import data_io
 from dynamix.webapp import optimize_results
 from dynamix.webapp import report_io
@@ -322,6 +323,31 @@ def _render_latest_scoreboard() -> None:
     st.download_button(
         "Download scoreboard (CSV)", df.to_csv(index=False), file_name="scoreboard.csv", mime="text/csv"
     )
+
+    # --- Charts (V4.2) ---
+    if "edge_eur" in df.columns and not df.empty:
+        st.subheader("Edge per optimizer (EUR)")
+        st.caption("Bars above zero beat the random control.")
+        st.bar_chart(df.set_index("Optimizer")[["edge_eur"]])
+
+    cal = charts_data.load_calibration(charts_data.latest_calibration())
+    if not cal.empty and "optimizer" in cal.columns:
+        st.subheader("Reliability (calibration)")
+        opts = sorted(cal["optimizer"].astype(str).unique().tolist())
+        sel = st.selectbox("Optimizer", opts, key="cal_opt")
+        hs = sorted(
+            pd.to_numeric(cal.loc[cal["optimizer"].astype(str) == sel, "hit_threshold"], errors="coerce")
+            .dropna().unique().tolist()
+        )
+        curve = charts_data.reliability_curve(cal, optimizer=sel, hit_threshold=int(hs[0]) if hs else None)
+        if not curve.empty:
+            plot = curve.rename(columns={"empirical": "observed"})
+            plot["perfect"] = plot["avg_p"]
+            st.line_chart(plot, x="avg_p", y=["observed", "perfect"])
+            st.caption("A well-calibrated model sits near the 'perfect' line.")
+        st.download_button(
+            "Download calibration (CSV)", cal.to_csv(index=False), file_name="calibration.csv", mime="text/csv"
+        )
 
 
 def page_optimize(status: "project_state.ProjectStatus") -> None:
