@@ -42,6 +42,8 @@ def _render_status(status: "project_state.ProjectStatus") -> None:
     light(status.has_training, "Training done" if status.has_training else "No training yet")
     light(status.has_forecast, "Forecast ready" if status.has_forecast else "No forecast yet")
     light(status.models_installed, "Models installed" if status.models_installed else "Models missing")
+    gpu = status.device_label.startswith("GPU")
+    st.sidebar.write(f"{'🟢' if gpu else '⚪'} Device: {status.device_label}")
     st.sidebar.caption(f"Next: {status.next_step()}")
 
 
@@ -63,10 +65,11 @@ def page_home(status: "project_state.ProjectStatus") -> None:
             "Install them with `pip install -e .[models]`, or see Troubleshooting in the manual."
         )
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Draws", status.data_rows)
     c2.metric("Last draw", status.data_last_date or "—")
     c3.metric("Latest training", status.statgrid_run or "none")
+    c4.metric("Device", status.device_label)
 
     st.subheader("Your next step")
     st.success(status.next_step())

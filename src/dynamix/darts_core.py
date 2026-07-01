@@ -183,7 +183,13 @@ def _get_common_darts_hparams(forecast_horizon: int) -> Dict[str, Any]:
     if not isinstance(pl_trainer_kwargs, dict):
         pl_trainer_kwargs = {}
 
-    if bool(getattr(C, "DARTS_FORCE_GPU", False)):
+    # Only use the GPU if it is both requested AND actually available (guards against
+    # DARTS_FORCE_GPU=True on a machine with no CUDA device, which would otherwise crash).
+    from dynamix import device as _device
+
+    if _device.resolve_darts_accelerator(
+        bool(getattr(C, "DARTS_FORCE_GPU", False)), _device.gpu_available()
+    ) == "gpu":
         pl_trainer_kwargs.setdefault("accelerator", "gpu")
         pl_trainer_kwargs.setdefault("devices", 1)
 

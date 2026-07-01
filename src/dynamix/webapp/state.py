@@ -104,6 +104,7 @@ class ProjectStatus:
     forecast_mtime: Optional[float]
     models_installed: bool
     milp_installed: bool
+    device_label: str = "CPU"
 
     @property
     def has_training(self) -> bool:
@@ -151,6 +152,12 @@ def read_project_status(
     run, run_mtime = latest_statgrid_run(exports_dir)
     fpath, fmtime = latest_forecast(state_dir)
     models, milp = deps_installed()
+    try:
+        from dynamix import device as _device
+
+        device_label = _device.describe_device()
+    except Exception:
+        device_label = "CPU"
     return ProjectStatus(
         data_exists=exists,
         data_rows=rows,
@@ -161,4 +168,5 @@ def read_project_status(
         forecast_mtime=fmtime,
         models_installed=models,
         milp_installed=milp,
+        device_label=device_label,
     )
