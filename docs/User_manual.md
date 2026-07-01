@@ -441,8 +441,14 @@ your status with small lights:
 - **Training** — done, or not yet.
 - **Forecast** — ready, or not yet.
 - **Models** — installed, or missing.
+- **Device** — what does the math: **GPU** (fast) or **CPU**.
 
 It also tells you your next step in plain words.
+
+**About the device.** The app picks the device for you. If your computer has a
+graphics card (GPU) and the models are installed, it uses the GPU. That is
+faster. If not, it uses the CPU. You do not need to change anything. The Home
+page shows which one is in use.
 
 ### Do the steps
 
