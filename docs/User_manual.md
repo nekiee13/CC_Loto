@@ -334,7 +334,64 @@ Yes. Set `DYNAMIX_DATA_FILE` to the file path before you run a command.
 
 ---
 
-## 10. Quick daily routine
+## 10. Troubleshooting
+
+Something went wrong? Find your problem below. Each one has a simple fix.
+
+**"python" is not found.**
+Your computer may use a different name. Try `py` instead of `python`. For
+example: `py stat.py --statgrid-export full`.
+
+**"No module named dynamix" (or a similar import error).**
+You skipped the one-time setup. Run this once in the app folder:
+`pip install -e .`.
+
+**My tickets show "N/A" for every model.**
+The smart model parts are not installed. The app still runs, but it has nothing
+to guess with. Install the model parts, then try again. Ask your setup helper,
+or see the install guide in the `docs` folder.
+
+**"No StatGrid runs found under: Output/Reports/Exports/StatGrid".**
+You asked for a forecast before training. Do a full training first (Step 2).
+Then forecast again.
+
+**"Loaded grid is empty" or "Grid missing required columns".**
+The training made no usable notes. This usually means the model parts are
+missing, so training had nothing to save. Install the model parts, then run a
+full training again: `python stat.py --statgrid-export full`.
+
+**"Target TS_9 not in data" (or a name it does not know).**
+You used a series name that does not exist. Valid names are `TS_1` through
+`TS_7`. Check your spelling.
+
+**"Data load error" or the app cannot read DATA.csv.**
+Open `DATA.csv` and check it. The first line must be the header. Each row needs
+eight values: a date and seven numbers. Use the date form day/month/year, like
+`30/05/2017`. Remove any blank lines.
+
+**The `milp` picker fails.**
+It needs an extra part. Install it once: `pip install -e .[milp]`.
+
+**"Resume refused: ... mismatch."**
+You changed a setting or the data, then tried to continue an old run. The app
+refuses this to keep results honest. Fix it one of two ways:
+- Start fresh: run the command without `--resume`.
+- Or put the old settings back, then resume again.
+
+**The command is very slow.**
+That can be normal. Full training and the `evo` picker take a long time. Let
+them finish. Use `--quiet` to see less text.
+
+**The picture app (GUI) will not open.**
+It needs a screen toolkit called Tkinter. On Linux, install `python3-tk`. On
+Windows and Mac it is usually already there.
+
+Still stuck? Open the newest file in `Output/Logs/`. The last lines often say
+what went wrong.
+
+---
+
+## 11. Quick daily routine
 
 Once you have trained, your normal day looks like this:
 
