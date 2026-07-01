@@ -302,7 +302,9 @@ But here is where they are:
 - **Reports and scores:** `Output/Reports/Optimization/`
 - **Logs:** `Output/Logs/`
 
-`<run>` is the name of a run, like a date-stamped folder.
+`<run>` is the name of a run, like a date-stamped folder. The training folder and
+the tickets folder each get their own run name. So the two names will not match.
+To find your newest tickets, just open the folder with the latest date.
 
 ---
 
