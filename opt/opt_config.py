@@ -9,12 +9,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 
-# Optimizer registry. `ALL_OPTIMIZERS` is every selectable strategy; `EXPERIMENTAL_OPTIMIZERS`
-# are stubs/incomplete strategies that must NOT be included in the `--optimizer all` fan-out and
-# are flagged when requested explicitly (E6.1). `evo` (run_evolutionary) is a deterministic stub
-# pending a real implementation (E6.2).
+# Optimizer registry. `ALL_OPTIMIZERS` is every selectable strategy; `NON_DEFAULT_OPTIMIZERS`
+# are strategies excluded from the `--optimizer all` fan-out and flagged when requested explicitly.
+# `evo` (run_evolutionary) is a real seeded genetic search (E6.2) but is kept opt-in because it is
+# an expensive hyperparameter search (it re-runs the full EVAL selection across a population over
+# many generations); include it only via an explicit `--optimizer evo`.
 ALL_OPTIMIZERS: Set[str] = {"greedy", "milp", "bandit", "evo"}
-EXPERIMENTAL_OPTIMIZERS: Set[str] = {"evo"}
+NON_DEFAULT_OPTIMIZERS: Set[str] = {"evo"}
 
 
 def _default_ts_list() -> List[str]:
@@ -111,7 +112,7 @@ class OptConfig:
     seed: int = 123
 
     # Optimizers to run (only used when action=optimize)
-    optimizer: str = "all"  # all|greedy|milp|bandit|evo  (evo=experimental stub, excluded from `all`)
+    optimizer: str = "all"  # all|greedy|milp|bandit|evo  (evo=opt-in expensive GA, excluded from `all`)
 
     # MILP
     milp_max_pool: int = 500
@@ -189,14 +190,14 @@ class OptConfig:
     def which_optimizers(self) -> Set[str]:
         o = str(self.optimizer).lower().strip()
         if o == "all":
-            # `all` fans out to production optimizers only; experimental stubs (e.g. `evo`)
-            # are excluded and must be requested explicitly (E6.1 honesty gate).
-            return set(ALL_OPTIMIZERS) - EXPERIMENTAL_OPTIMIZERS
+            # `all` fans out to the default (fast) optimizers only; opt-in strategies (e.g. the
+            # expensive `evo` GA) are excluded and must be requested explicitly.
+            return set(ALL_OPTIMIZERS) - NON_DEFAULT_OPTIMIZERS
         return {o}
 
-    def experimental_optimizers_selected(self) -> Set[str]:
-        """Experimental optimizers in the current selection (surface a warning before running)."""
-        return self.which_optimizers() & EXPERIMENTAL_OPTIMIZERS
+    def non_default_optimizers_selected(self) -> Set[str]:
+        """Opt-in (non-default) optimizers in the current selection (surface a heads-up first)."""
+        return self.which_optimizers() & NON_DEFAULT_OPTIMIZERS
 
 
 def parse_args() -> argparse.Namespace:
@@ -224,9 +225,9 @@ def parse_args() -> argparse.Namespace:
     # optimize strategy selection (ignored for --action forecast; kept for CLI consistency)
     p.add_argument(
         "--optimizer", type=str, default="all", choices=["all", "greedy", "milp", "bandit", "evo"],
-        help="Strategy to run. 'all' runs production optimizers (greedy, milp, bandit). "
-             "'evo' is EXPERIMENTAL (deterministic stub) and is excluded from 'all'; "
-             "select it explicitly to run it.",
+        help="Strategy to run. 'all' runs the default optimizers (greedy, milp, bandit). "
+             "'evo' is a real seeded genetic hyperparameter search but is expensive, so it is "
+             "excluded from 'all'; select it explicitly to run it.",
     )
 
     # resume / run folder control

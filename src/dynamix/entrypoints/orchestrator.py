@@ -478,12 +478,12 @@ def _run_optimize(cfg) -> None:
 
     want = sorted(list(cfg.which_optimizers()))
     log.info(f"[OPT] Optimizers selected: {want}")
-    experimental = sorted(cfg.experimental_optimizers_selected())
-    if experimental:
+    non_default = sorted(cfg.non_default_optimizers_selected())
+    if non_default:
         log.info(
-            f"[OPT] WARNING: experimental/stub optimizer(s) selected: {experimental}. "
-            "These are not real optimization yet (deterministic stub) and are excluded from "
-            "`--optimizer all`; results are for development only."
+            f"[OPT] NOTE: opt-in optimizer(s) selected: {non_default}. These are excluded from "
+            "`--optimizer all` because they are expensive (e.g. `evo` is a seeded genetic "
+            "hyperparameter search that re-runs the full EVAL selection over a population)."
         )
     log.info("[OPT] ------------------ Strategy execution begins ------------------")
 

@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (E1 + E2 + E3 + E4 + E5 + E7 + E8 complete; E6.1 done — only optional E6.2 remains)_
+_Last updated: 2026-07-01 (ALL epics complete — 21/21)_
 
 ---
 
@@ -20,10 +20,10 @@ _Last updated: 2026-07-01 (E1 + E2 + E3 + E4 + E5 + E7 + E8 complete; E6.1 done 
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ✅ Done | 2 / 2 | `dynamix.candidate_grid` extracted; golden-locked; stat re-exports |
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
-| E6 — Resolve evolutionary stub | P2 | 🟡 Partial | 1 / 2 | E6.1 done; E6.2 optional |
+| E6 — Resolve evolutionary stub | P2 | ✅ Done | 2 / 2 | real seeded GA; evo opt-in (expensive) |
 | E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ✅ Done | 4 / 4 | Anytime |
-| **Total** | | **🟢** | **20 / 21** | |
+| **Total** | | **🟢** | **21 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -68,8 +68,8 @@ _Last updated: 2026-07-01 (E1 + E2 + E3 + E4 + E5 + E7 + E8 complete; E6.1 done 
 ### E6 — Resolve evolutionary stub `P2`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E6.1 Decision gate + honesty fix | ✅ | — | (uncommitted) | `evo` gated experimental; excluded from `all`; warns on explicit select |
-| E6.2 Implement evolutionary search (optional) | ⬜ | — | — | depends on E5.2 |
+| E6.1 Decision gate + honesty fix | ✅ | — | a6af8ae | `evo` excluded from `all`; opt-in, flagged on explicit select |
+| E6.2 Implement evolutionary search (optional) | ✅ | — | (uncommitted) | real seeded GA over 4 hyperparams; deterministic + elitist |
 
 ### E7 — De-dupe rounding storage `P2`
 | Task | Status | Owner | PR / Commit | Notes |
@@ -95,6 +95,23 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E6.2 done → Epic E6 complete (2/2); plan finished 21/21.** Replaced the
+  `run_evolutionary` deterministic stub with a real seeded genetic algorithm over the four strategy
+  hyperparameters `{max_overlap_k, shortlist_m, beam, hit_threshold}`. Fitness is the EVAL portfolio
+  economics (total `net_eur`, which ranks identically to E1 `edge_eur` since the random baseline is
+  genome-independent), computed by a shared `_eval_params_over_eval` helper that runs the same
+  per-step greedy selection as the other strategies (the "share fitness with strategy eval"
+  refactor). Selection (tournament), uniform crossover, and per-gene mutation are all driven by one
+  `random.Random(cfg.seed)`; genome evaluations are memoized and deterministic, so the whole search
+  is reproducible under seed. Generation 0 seeds the configured defaults, elitism carries the best
+  genome forward, and the returned best is taken over every genome evaluated — guaranteeing it's
+  never worse than the initial best. Red test `tests/optimization/test_evolutionary.py`
+  (`test_evolution_is_deterministic_under_seed`, `test_evolution_improves_or_matches_initial_fitness`)
+  over a synthetic StatGrid; `TestOptConfig` gained the evo fields. Since `evo` is no longer a stub,
+  the E6.1 gate was reframed from "experimental stub" to "opt-in (expensive)":
+  `EXPERIMENTAL_OPTIMIZERS`→`NON_DEFAULT_OPTIMIZERS`, `experimental_optimizers_selected`→
+  `non_default_optimizers_selected`, and the CLI help / orchestrator note now describe evo honestly
+  (still excluded from `--optimizer all` for cost). Suite: **111 tests, OK (skipped=5)**. **21 / 21**.
 - 2026-07-01 — **E8.4 done → Epic E8 complete (4/4); determinism claim scoped.** Reworded SRS
   **NFR-9** to scope reproducibility to the **optimizer (Stage 3) only**: given an identical
   candidate grid + config, optimizer outputs are reproducible (fixed seeds, deterministic feature

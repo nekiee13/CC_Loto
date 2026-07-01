@@ -671,73 +671,77 @@ def run_bandit(
     return StrategyResult(state=state, summary=summary, diag_rows=diag_rows)
 
 
-def run_evolutionary(
+# ----------------------------------------------------------------------
+# Evolutionary hyper-strategy search (E6.2)
+# ----------------------------------------------------------------------
+# Genes searched by the GA: the four strategy hyperparameters that shape the candidate pool and
+# the portfolio selection. All are positive integers within config-derived bounds.
+_EVO_GENES: Tuple[str, ...] = ("max_overlap_k", "shortlist_m", "beam", "hit_threshold")
+
+
+def _evo_bounds(cfg: OptConfig) -> Dict[str, Tuple[int, int]]:
+    n_ts = max(2, len(list(cfg.ts_list)))
+    return {
+        "max_overlap_k": (1, n_ts),
+        "shortlist_m": (2, 20),
+        "beam": (25, 400),
+        "hit_threshold": (2, n_ts),
+    }
+
+
+def _evo_clamp(params: Dict[str, int], bounds: Dict[str, Tuple[int, int]]) -> Dict[str, int]:
+    out: Dict[str, int] = {}
+    for g in _EVO_GENES:
+        lo, hi = bounds[g]
+        out[g] = int(max(lo, min(hi, int(params[g]))))
+    return out
+
+
+def _evo_key(params: Dict[str, int]) -> Tuple[int, int, int, int]:
+    return tuple(int(params[g]) for g in _EVO_GENES)  # type: ignore[return-value]
+
+
+def _eval_params_over_eval(
     cfg: OptConfig,
-    opt_run_id: str,
-    state: Dict[str, Any],
-    grid: pd.DataFrame,
     engine: ConditionalProbEngine,
+    grid: pd.DataFrame,
     eval_steps: List[int],
-    train_steps: List[int],
-) -> StrategyResult:
-    """Evolutionary search (currently deterministic stub) with full eval progress.
+    params: Dict[str, int],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], float]:
+    """Score one hyperparameter set over EVAL via the greedy portfolio selection.
 
-    Current behavior (kept intentionally conservative/resume-safe):
-      - Stores a 'best' record in state, but does not modify cfg weights (cfg is frozen).
-      - Runs an evaluation pass identical to greedy using the current cfg weights.
+    This is the shared fitness/eval for the evolutionary search — the same per-step computation
+    the greedy/bandit strategies run. Returns ``(rows, diag_rows, fitness)`` where fitness is the
+    total EVAL ``net_eur`` (ranks identically to E1 ``edge_eur``, since the random baseline is a
+    genome-independent constant), with summed ``q_any`` as an infinitesimal deterministic tiebreak.
     """
-    stage_name = "evo"
-    st = state.setdefault("stages", {}).setdefault(
-        stage_name, {"done": False, "best": None, "diag_rows": [], "rows": [], "next_pos": 0}
-    )
+    rows: List[Dict[str, Any]] = []
+    diag_rows: List[Dict[str, Any]] = []
+    total_net = 0.0
+    total_qany = 0.0
+    mk = int(params["max_overlap_k"])
+    sm = int(params["shortlist_m"])
+    bm = int(params["beam"])
+    ht = int(params["hit_threshold"])
 
-    if st.get("done", False) and st.get("best") is not None:
-        best = st["best"]
-    else:
-        best = {"pair_weight": float(cfg.pair_weight), "triple_weight": float(cfg.triple_weight), "score": 0.0}
-        st["best"] = best
-        st["done"] = True
-
-    next_pos = int(st.get("next_pos", 0))
-    rows = list(st.get("rows", []))
-    diag_rows = list(st.get("diag_rows", []))
-
-    base = cfg.base_strategy_params()
-
-    n_total = len(eval_steps)
-    t_stage_start = time.monotonic()
-    t_last_print = 0.0
-    _p(f"[OPT][{stage_name}] start: resuming_pos={next_pos} | eval_steps={n_total}", cfg=cfg)
-
-    for pos in range(next_pos, n_total):
-        idx = int(eval_steps[pos])
+    for idx in (int(x) for x in eval_steps):
         step_df = grid[grid["dataset_index"] == idx]
         if step_df.empty:
-            st["next_pos"] = pos + 1
             continue
-
         true_ticket = _true_ticket_from_step(step_df, cfg.ts_list)
-        shortlists = engine.build_shortlists_for_step(step_df, shortlist_m=int(base["shortlist_m"]))
-        pool = engine.build_ticket_pool_beam(shortlists, beam=int(base["beam"]))
-
+        shortlists = engine.build_shortlists_for_step(step_df, shortlist_m=sm)
+        pool = engine.build_ticket_pool_beam(shortlists, beam=bm)
         tickets, q_list, q_any = select_portfolio_greedy(
-            cfg,
-            engine,
-            pool,
-            shortlists,
-            max_tickets=int(cfg.max_tickets_per_draw),
-            max_overlap_k=int(base["max_overlap_k"]),
-            hit_threshold=int(base["hit_threshold"]),
+            cfg, engine, pool, shortlists,
+            max_tickets=int(cfg.max_tickets_per_draw), max_overlap_k=mk, hit_threshold=ht,
         )
-
         econ = compute_portfolio_economics(
-            tickets,
-            true_ticket,
-            payout_by_hits=cfg.payout_by_hits,
-            ticket_cost_eur=cfg.ticket_cost_eur,
+            tickets, true_ticket, payout_by_hits=cfg.payout_by_hits, ticket_cost_eur=cfg.ticket_cost_eur,
         )
         step_profit = float(econ["net_eur"])
         max_hits = int(econ["best_hits"])
+        total_net += step_profit
+        total_qany += float(q_any)
 
         rows.append({"dataset_index": idx, "tickets": int(len(tickets)), "profit": step_profit, "max_hits": max_hits})
         diag_rows.append(
@@ -748,39 +752,144 @@ def run_evolutionary(
                 "tickets": tickets_to_str(tickets),
                 "q_per_ticket": list_to_str(q_list),
                 "q_any": float(q_any),
-                "hit_threshold": int(base["hit_threshold"]),
+                "hit_threshold": ht,
                 "realized_max_hits": int(max_hits),
-                "success_ge_H": int(1 if max_hits >= int(base["hit_threshold"]) else 0),
+                "success_ge_H": int(1 if max_hits >= ht else 0),
                 "profit": float(step_profit),
                 "arm": "",
             }
         )
 
-        st["next_pos"] = pos + 1
-        st["rows"] = rows
-        st["diag_rows"] = diag_rows
+    fitness = float(total_net) + 1e-9 * float(total_qany)
+    return rows, diag_rows, float(fitness)
 
+
+def run_evolutionary(
+    cfg: OptConfig,
+    opt_run_id: str,
+    state: Dict[str, Any],
+    grid: pd.DataFrame,
+    engine: ConditionalProbEngine,
+    eval_steps: List[int],
+    train_steps: List[int],
+) -> StrategyResult:
+    """Seeded genetic algorithm over ``{max_overlap_k, shortlist_m, beam, hit_threshold}`` (E6.2).
+
+    Fitness is the EVAL portfolio economics (:func:`_eval_params_over_eval`). Selection (tournament),
+    crossover (uniform per-gene), and mutation (per-gene resample) are all driven by a single
+    ``random.Random(cfg.seed)``, and every genome's evaluation is deterministic, so the whole search
+    is reproducible under ``seed``. The best genome is carried across generations (elitism) and the
+    returned best is taken over every genome evaluated, so it is never worse than the initial
+    population's best. The winning genome's per-step run populates ``diag_rows``/``summary`` (keyed
+    ``optimizer="evolutionary"``) exactly like the other strategies.
+
+    The search is bounded (``evo_generations`` x ``evo_pop_size``, memoized), so it runs in one call
+    and caches its whole result in state for idempotent resume.
+    """
+    stage_name = "evo"
+    st = state.setdefault("stages", {}).setdefault(stage_name, {"done": False})
+
+    if st.get("done") and st.get("best_params") is not None:
+        state["stages"][stage_name] = st
+        return StrategyResult(state=state, summary=dict(st["summary"]), diag_rows=list(st["diag_rows"]))
+
+    bounds = _evo_bounds(cfg)
+    rng = random.Random(int(cfg.seed))
+    pop_size = max(2, int(getattr(cfg, "evo_pop_size", 22)))
+    generations = max(1, int(getattr(cfg, "evo_generations", 25)))
+    tournament_k = min(3, pop_size)
+
+    # genome key -> (rows, diag_rows, fitness); memoizes the expensive EVAL pass.
+    cache: Dict[Tuple[int, int, int, int], Tuple[List[Dict[str, Any]], List[Dict[str, Any]], float]] = {}
+
+    def evaluate(params: Dict[str, int]) -> float:
+        key = _evo_key(params)
+        hit = cache.get(key)
+        if hit is None:
+            hit = _eval_params_over_eval(cfg, engine, grid, eval_steps, params)
+            cache[key] = hit
+        return hit[2]
+
+    def random_genome() -> Dict[str, int]:
+        return _evo_clamp({g: rng.randint(*bounds[g]) for g in _EVO_GENES}, bounds)
+
+    def tournament() -> Dict[str, int]:
+        contenders = rng.sample(population, tournament_k) if len(population) >= tournament_k else list(population)
+        best_c = contenders[0]
+        best_f = evaluate(best_c)
+        for c in contenders[1:]:
+            f = evaluate(c)
+            if f > best_f or (f == best_f and _evo_key(c) < _evo_key(best_c)):
+                best_c, best_f = c, f
+        return dict(best_c)
+
+    def crossover(p1: Dict[str, int], p2: Dict[str, int]) -> Dict[str, int]:
+        return {g: (p1[g] if rng.random() < 0.5 else p2[g]) for g in _EVO_GENES}
+
+    def mutate(child: Dict[str, int]) -> Dict[str, int]:
+        out = dict(child)
+        for g in _EVO_GENES:
+            if rng.random() < 0.3:
+                lo, hi = bounds[g]
+                out[g] = rng.randint(lo, hi)
+        return _evo_clamp(out, bounds)
+
+    def argbest() -> Tuple[Dict[str, int], float]:
+        best_k: Optional[Tuple[int, int, int, int]] = None
+        best_f = float("-inf")
+        for k, (_, _, fit) in cache.items():
+            if fit > best_f or (fit == best_f and (best_k is None or k < best_k)):
+                best_f, best_k = fit, k
+        assert best_k is not None
+        return dict(zip(_EVO_GENES, best_k)), float(best_f)
+
+    # Generation 0: the configured defaults (so "initial best" is well-defined) plus random genomes.
+    seed_params = _evo_clamp({g: int(getattr(cfg, g)) for g in _EVO_GENES}, bounds)
+    population: List[Dict[str, int]] = [seed_params] + [random_genome() for _ in range(pop_size - 1)]
+
+    _p(f"[OPT][{stage_name}] start: GA pop={pop_size} gens={generations} eval_steps={len(eval_steps)}", cfg=cfg)
+    t_stage_start = time.monotonic()
+    t_last_print = 0.0
+
+    for p in population:
+        evaluate(p)
+    initial_best_params, initial_best_fitness = argbest()
+
+    for gen in range(generations):
+        elite, _ = argbest()
+        next_pop: List[Dict[str, int]] = [dict(elite)]
+        while len(next_pop) < pop_size:
+            child = mutate(crossover(tournament(), tournament()))
+            next_pop.append(child)
+        population = next_pop
+        for p in population:
+            evaluate(p)
         t_last_print = _progress_report(
-            cfg=cfg,
-            stage_name=stage_name,
-            pos_done=pos + 1,
-            pos_total=n_total,
-            t_stage_start=t_stage_start,
-            t_last_print=t_last_print,
-            force=False,
+            cfg=cfg, stage_name=stage_name, pos_done=gen + 1, pos_total=generations,
+            t_stage_start=t_stage_start, t_last_print=t_last_print, force=False,
         )
 
     _progress_report(
-        cfg=cfg,
-        stage_name=stage_name,
-        pos_done=n_total,
-        pos_total=n_total,
-        t_stage_start=t_stage_start,
-        t_last_print=t_last_print,
-        force=True,
+        cfg=cfg, stage_name=stage_name, pos_done=generations, pos_total=generations,
+        t_stage_start=t_stage_start, t_last_print=t_last_print, force=True,
     )
 
-    state["stages"][stage_name] = st
+    best_params, best_fitness = argbest()
+    rows, diag_rows, _ = cache[_evo_key(best_params)]
+
     summary = eval_summary(rows, cfg)
-    summary["best_weights"] = best
+    summary["best_params"] = dict(best_params)
+    summary["best_fitness"] = float(best_fitness)
+    summary["initial_best_params"] = dict(initial_best_params)
+    summary["initial_best_fitness"] = float(initial_best_fitness)
+    summary["generations"] = int(generations)
+    summary["pop_size"] = int(pop_size)
+    summary["evaluations"] = int(len(cache))
+
+    st["done"] = True
+    st["best_params"] = dict(best_params)
+    st["rows"] = rows
+    st["diag_rows"] = diag_rows
+    st["summary"] = summary
+    state["stages"][stage_name] = st
     return StrategyResult(state=state, summary=summary, diag_rows=diag_rows)

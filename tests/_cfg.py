@@ -61,6 +61,15 @@ class TestOptConfig:
         {"name": "B", "max_overlap_k": 1, "shortlist_m": 5, "beam": 40, "hit_threshold": 3},
     ])
 
+    # --- evolutionary (E6.2) ---
+    max_overlap_k: int = 3
+    shortlist_m: int = 8
+    beam: int = 60
+    hit_threshold: int = 3
+    evo_generations: int = 6
+    evo_pop_size: int = 8
+    evo_fitness_sample_max_steps: int = 120
+
     # --- compatibility ---
     use_pair_triple_compat: bool = False
     pair_weight: float = 0.0
