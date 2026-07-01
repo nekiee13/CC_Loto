@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from dynamix.webapp import data_io
+from dynamix.webapp import results as forecast_results
 from dynamix.webapp import runner
 from dynamix.webapp import state as project_state
 
@@ -231,9 +232,64 @@ def page_train(status: "project_state.ProjectStatus") -> None:
     )
 
 
+def _render_latest_tickets() -> None:
+    status = project_state.read_project_status()
+    if not status.forecast_path:
+        st.info("No forecast file found yet.")
+        return
+    view = forecast_results.load_forecast(status.forecast_path)
+    if not view.ok:
+        st.error(view.error)
+        return
+    if not view.tickets:
+        st.info("The forecast produced no tickets — the models may not be installed (see Home).")
+        return
+
+    st.subheader("Your tickets")
+    df = pd.DataFrame(view.ticket_rows())
+    st.dataframe(df, width="stretch", hide_index=True)
+
+    meta = f"From training run `{view.grid_run_id or '?'}`"
+    if view.generated_at:
+        meta += f" · generated {view.generated_at}"
+    if view.q_any is not None:
+        meta += f" · q_any = {view.q_any:.4f}"
+    st.caption(meta)
+    st.download_button(
+        "Download tickets (CSV)", df.to_csv(index=False), file_name="tickets.csv", mime="text/csv"
+    )
+
+
 def page_forecast(status: "project_state.ProjectStatus") -> None:
     st.header("3. Forecast")
-    st.write("Make your tickets for the next draw. (Coming in G6.)")
+    st.write("Make up to 5 tickets for the next draw (Steps 3 and 5b).")
+
+    if not status.has_training:
+        st.warning(
+            "No training yet. Do a **full training** on the Train page first (Step 2), "
+            "then come back here."
+        )
+        return
+
+    with st.expander("Advanced settings"):
+        run_id = st.text_input("Which training run — `--run-id`", value="latest", key="fc_run_id")
+        max_tickets = st.number_input(
+            "How many tickets — `--max-tickets`", min_value=1, max_value=20, value=5, step=1, key="fc_max"
+        )
+        seed = st.number_input("Random seed — `--seed`", value=123, step=1, key="fc_seed")
+    options: Dict[str, object] = {
+        "run_id": (run_id or "").strip() or "latest",
+        "max_tickets": int(max_tickets),
+        "seed": int(seed),
+    }
+
+    render_job_panel(
+        key="forecast",
+        start_label="Make tickets",
+        action="forecast",
+        options=options,
+        on_success=_render_latest_tickets,
+    )
 
 
 PAGES = {

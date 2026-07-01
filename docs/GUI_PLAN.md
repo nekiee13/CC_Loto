@@ -204,7 +204,7 @@ Uses the G4.2 log panel. **Why.** The manual's training steps without the termin
 
 ---
 
-# EPIC G6 — Forecast page
+# EPIC G6 — Forecast page  ✅
 `priority:P0` · `type:feature`
 
 **What.** One-click forecast that shows tickets nicely, gated on having a StatGrid. **Why.** Steps 3 &
@@ -213,8 +213,8 @@ Uses the G4.2 log panel. **Why.** The manual's training steps without the termin
 **Definition of done.** A user clicks "Make tickets" and sees the parsed tickets from `forecast.json`,
 or a clear "train first" gate if no StatGrid exists.
 
-### Task G6.1 — `results.py` forecast.json parser (pure)
-`type:feature` · `layer:core_unit` · `effort:S`
+### Task G6.1 — `results.py` forecast.json parser (pure) ✅
+`type:feature` · `layer:webapp` · `effort:S`
 **What.** `load_forecast(path) -> ForecastView`: the up-to-5 tickets as a tidy table (TS_1..TS_7 per
 ticket), plus metadata (run id, timestamp, per-ticket q if present). Tolerates missing/partial files.
 **Why.** Turn raw JSON into a friendly table; keep parsing testable.
@@ -224,7 +224,7 @@ ticket), plus metadata (run id, timestamp, per-ticket q if present). Tolerates m
 **Acceptance criteria**
 - [ ] Sample forecast parses to the correct ticket rows + metadata; malformed input degrades safely.
 
-### Task G6.2 — Forecast page UI
+### Task G6.2 — Forecast page UI ✅
 `type:feature` · `layer:ui` · `effort:M`
 **What.** **Make tickets** button (`--action forecast --run-id latest`) via the runner; on success
 render the G6.1 table + a CSV/JSON download; disabled with "Train first (Step 2)" when no StatGrid.
@@ -294,6 +294,20 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Epic G6 complete (G6.1 + G6.2 ✅) → v1 core loop functional.** Added
+  `dynamix.webapp.results` — pure, Streamlit-free `load_forecast(path) -> ForecastView`: parses the
+  orchestrator's `forecast.json` (top-level `tickets` = 7-int lists, parallel `q_per_ticket`, plus
+  `q_any`/`generated_at`/`grid_run_id`/`opt_run_id`), with `ticket_rows()` → `{Ticket, TS_1..TS_7,
+  q}`; missing/malformed/partial files degrade to an "empty" view (never raises). Red→Green
+  `tests/webapp/test_results.py` (5 tests). Built the Forecast page: gated on `has_training` (shows
+  "train first" when no StatGrid), a **Make tickets** button (`--action forecast --run-id latest`)
+  via `render_job_panel`, an Advanced expander (`--run-id`/`--max-tickets`/`--seed`), and an
+  on-success renderer that loads the latest `forecast.json` into a tickets table + CSV download.
+  **Live-verified** via `AppTest` over temp `DYNAMIX_OUTPUT_DIR`: (A) no StatGrid → warning + no
+  button; (B) StatGrid + `forecast.json` → Make-tickets button, and an injected finished job renders
+  the tickets table with columns `Ticket, TS_1..TS_7, q`. Suite: **148 tests, OK (skipped=5)**. The
+  v1 core loop (Home/Status → Data → Train → Forecast, with live logs + guardrails) is now usable
+  end to end; only docs (G7) remain.
 - 2026-07-01 — **Epic G5 complete (G5.1 ✅).** Finished the Train page (reusing `render_job_panel`):
   a **Full training (slow)** button gated behind a confirm checkbox, a fast **Add new draw to notes**
   (incremental) button, and an Advanced expander exposing `--statgrid-dedupe` and `--resume` with
