@@ -12,7 +12,6 @@ Tested over temp dirs so results are deterministic and need no torch/darts/strea
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -87,8 +86,10 @@ class TestState(unittest.TestCase):
         # With data but no training, the next step is a full training.
         self.assertIn("training", st.next_step().lower())
 
-        # Reading status must not import Streamlit (logic stays Streamlit-free).
-        self.assertNotIn("streamlit", sys.modules)
+        # state.py must be Streamlit-free (logic stays importable without the [gui] extra).
+        # Scan the source rather than sys.modules, which other tests may have polluted.
+        src = Path(state.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("import streamlit", src)
 
 
 if __name__ == "__main__":

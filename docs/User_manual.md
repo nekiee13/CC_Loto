@@ -53,6 +53,8 @@ That is it. You are ready.
 
 > Tip: If `python` does not work, try `py` instead. Both are fine.
 
+> Don't like typing commands? There is a click-only app too. See section 12.
+
 ---
 
 ## 4. The big picture
@@ -402,3 +404,57 @@ Once you have trained, your normal day looks like this:
 5. Open `forecast.json` in the `Output` folder to see your tickets.
 
 That is the whole loop. Train again only when you choose to.
+
+---
+
+## 12. Prefer clicking? Use the GUI
+
+Don't like typing commands? Use the app's window instead. It does the same steps.
+You can use the commands, the window, or both. Your choice.
+
+### Turn it on (once)
+
+Install the window part one time:
+
+```
+pip install -e .[gui]
+```
+
+### Start the window
+
+```
+dynamix-gui
+```
+
+This opens the app in your web browser. To stop it, close the browser tab. Then
+press `Ctrl+C` in the terminal.
+
+> There is also an older window app. Start it with `python gui.py`. The new
+> browser app is easier, so use `dynamix-gui` if you can.
+
+### What you see
+
+On the left is a list of steps. Click a step to open it. The left side also shows
+your status with small lights:
+
+- **Draws** — how many draws you have.
+- **Training** — done, or not yet.
+- **Forecast** — ready, or not yet.
+- **Models** — installed, or missing.
+
+It also tells you your next step in plain words.
+
+### Do the steps
+
+1. **Data** — see your draws in a table. Add a new one with the form. The form
+   checks your numbers before it saves.
+2. **Train** — click **Full training** to learn from every draw (slow). Or click
+   **Add new draw to notes** (fast). You watch the progress bar. You can press
+   **Stop** at any time.
+3. **Forecast** — click **Make tickets**. Your tickets show in a table. You can
+   download them.
+
+### It is the same as the commands
+
+Each button runs the same step as a command in this guide. Nothing new to learn.
+Numbers show up in the same `Output` folder either way.

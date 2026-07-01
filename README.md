@@ -68,6 +68,20 @@ python orchestrator.py --action forecast --run-id latest   # next-step tickets
 Outputs are written under `Output/` (gitignored): StatGrid shards, optimizer state,
 diagnostics, calibration reports, and `forecast.json`.
 
+### GUI (click-driven, same workflow)
+
+A Streamlit GUI wraps the CLIs so the whole loop (add draws → train → forecast) can be done with
+buttons; it runs the same entrypoints as subprocesses and streams their logs, so results are
+identical to the CLI. Install the extra and launch:
+
+```bash
+pip install -e .[gui]
+dynamix-gui                 # opens the app in your browser
+```
+
+See the [User manual](docs/User_manual.md) §12 for the step-by-step. The legacy Tkinter GUI
+(`python gui.py`) still works and coexists.
+
 ## Configuration
 
 Central config is `src/dynamix/constants.py` (data columns, `INDEX_MODE`, model toggles,

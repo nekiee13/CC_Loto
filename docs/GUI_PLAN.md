@@ -7,6 +7,9 @@ subprocesses and streams their logs. It reimplements **no** pipeline logic, so l
 determinism (SRS NFR-9) are guaranteed by construction. The CLI stays fully usable; the existing
 Tkinter GUI is left untouched (coexists for now).
 
+**Status: v1 COMPLETE ✅ (all 7 epics G1–G7).** The full core loop is click-driven and equivalent
+to the CLI; the suite is 150 tests, OK. Remaining work is the v2 backlog (bottom of this doc).
+
 ## How to use this plan
 
 - Work one task at a time, in dependency order (see graph at the end).
@@ -236,7 +239,7 @@ Advanced expander: `--max-tickets`, `--seed`, `--run-id`. **Why.** Steps 3 & 5b,
 
 ---
 
-# EPIC G7 — Docs & manual integration
+# EPIC G7 — Docs & manual integration  ✅
 `priority:P1` · `type:chore`
 
 **What.** Document the GUI path so users can pick CLI *or* GUI for the same workflow. **Why.** The
@@ -245,7 +248,7 @@ stated goal: two equivalent routes.
 **Definition of done.** The manual and README explain how to launch and use the GUI; both GUIs'
 coexistence is stated.
 
-### Task G7.1 — Manual "Using the GUI" section + README/install note
+### Task G7.1 — Manual "Using the GUI" section + README/install note ✅
 `type:chore` · `layer:contract` · `effort:S`
 **What.** Add a GUI section to `User_manual.md` mirroring Steps 1–5 with screenshots/placeholders and
 the `pip install -e .[gui]` + `dynamix-gui` launch. Note the Tkinter GUI still exists. Keep
@@ -255,8 +258,8 @@ Flesch-Kincaid < 10. **Why.** Beginners need the click-path written down too.
 - [ ] Manual documents install, launch, and each core-loop action via the GUI; readability < 10.
 - [ ] README mentions the GUI and the `[gui]` extra.
 
-### Task G7.2 — Import/smoke test in CI *(optional)*
-`type:test` · `layer:integration` · `effort:S`
+### Task G7.2 — Import/smoke test in CI *(optional)* ✅
+`type:test` · `layer:webapp` · `effort:S`
 **What.** A headless smoke test that imports `dynamix.webapp` helpers and (if Streamlit is present)
 builds the app object via `streamlit.testing.AppTest` for one render. **Why.** Catch breakage without
 manual clicking. **Acceptance criteria**
@@ -294,6 +297,18 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Epic G7 complete (G7.1 + G7.2 ✅) → v1 GUI plan DONE (all 7 epics).** Added a
+  beginner-friendly **§12 "Prefer clicking? Use the GUI"** to `User_manual.md` (install
+  `pip install -e .[gui]`, launch `dynamix-gui`, the status lights, and the Data/Train/Forecast
+  steps — noting the legacy Tkinter GUI coexists), a pointer from the setup section, and a **GUI**
+  subsection in the README. Readability held at **Flesch-Kincaid ~2.7**. Added
+  `tests/webapp/test_gui_smoke.py`: helper modules import (always), and — when Streamlit is present
+  — the app renders once via `AppTest` with no exception (skipped without the `[gui]` extra). Also
+  hardened `test_state`'s "Streamlit-free" guard to scan the source instead of global `sys.modules`
+  (which the smoke test now legitimately populates). Suite: **150 tests, OK (skipped=5)**.
+  **v1 GUI is complete**: Home/Status → Data → Train → Forecast, with live logs, Stop, and
+  guardrails, entirely click-driven and equivalent to the CLI. Remaining items are the **v2 backlog**
+  (Optimize & Score, Reports, single-series, charts/exports, retire Tkinter).
 - 2026-07-01 — **Epic G6 complete (G6.1 + G6.2 ✅) → v1 core loop functional.** Added
   `dynamix.webapp.results` — pure, Streamlit-free `load_forecast(path) -> ForecastView`: parses the
   orchestrator's `forecast.json` (top-level `tickets` = 7-int lists, parallel `q_per_ticket`, plus
