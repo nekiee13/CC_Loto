@@ -11,8 +11,12 @@ the pages here are thin views. Later epics fill in the Data/Train/Forecast bodie
 """
 from __future__ import annotations
 
+from pathlib import Path
+
+import pandas as pd
 import streamlit as st
 
+from dynamix.webapp import data_io
 from dynamix.webapp import state as project_state
 
 APP_TITLE = "DynaMix Lottery Forecasting"
@@ -61,9 +65,53 @@ def page_home(status: "project_state.ProjectStatus") -> None:
     st.success(status.next_step())
 
 
+def _data_file() -> Path:
+    from dynamix import constants as C
+
+    return Path(C.DATA_FILE)
+
+
 def page_data(status: "project_state.ProjectStatus") -> None:
     st.header("1. Data")
-    st.write("View your draws and add a new one. (Coming in G3.)")
+    data_file = _data_file()
+    st.caption(f"File: `{data_file}`")
+
+    flash = st.session_state.pop("data_flash", None)
+    if flash:
+        st.success(flash)
+
+    header, rows, err = data_io.read_data(data_file)
+    if err:
+        st.warning(err)
+
+    st.subheader("Your draws")
+    if rows:
+        cols = header or data_io.expected_header()
+        df = pd.DataFrame(rows, columns=cols[: len(rows[0])])
+        st.dataframe(df.iloc[::-1], width="stretch", hide_index=True)  # newest first
+        st.caption(f"{len(rows)} draws. Newest at the top.")
+    else:
+        st.info("No draws yet. Add your first one below.")
+
+    st.subheader("Add a new draw")
+    st.caption("New draws come twice a week. Add each one as it happens.")
+    ts_cols = (header or data_io.expected_header())[1:]
+    with st.form("add_draw", clear_on_submit=True):
+        date = st.text_input("Date (dd/mm/yyyy)", placeholder="31/12/2026", key="new_date")
+        input_cols = st.columns(len(ts_cols))
+        values = [
+            input_cols[i].number_input(c, step=1, value=0, format="%d", key=f"new_{c}")
+            for i, c in enumerate(ts_cols)
+        ]
+        submitted = st.form_submit_button("Add draw")
+
+    if submitted:
+        res = data_io.append_draw(data_file, date, [int(v) for v in values])
+        if res.ok:
+            st.session_state["data_flash"] = f"Added draw for {res.date}. It is now the newest row."
+            st.rerun()
+        else:
+            st.error(res.error)
 
 
 def page_train(status: "project_state.ProjectStatus") -> None:

@@ -108,7 +108,7 @@ missing → "forecasts will be N/A + how to install"; DATA.csv invalid → link 
 
 ---
 
-# EPIC G3 — Data page
+# EPIC G3 — Data page  ✅
 `priority:P0` · `type:feature`
 
 **What.** View DATA.csv and add a new draw safely. **Why.** Steps 1 & 4 of the manual; bad data is the
@@ -117,8 +117,8 @@ top cause of "Data load error".
 **Definition of done.** A user can view all draws and append a valid new draw from a form; invalid
 input is rejected with a clear message.
 
-### Task G3.1 — DATA.csv validation + append (pure)
-`type:feature` · `layer:core_unit` · `effort:M`
+### Task G3.1 — DATA.csv validation + append (pure) ✅
+`type:feature` · `layer:webapp` · `effort:M`
 **What.** Pure helpers: `validate_row(date, values)` (7 integers, `dd/mm/yyyy` date, ranges from
 `constants` if defined) and `append_draw(path, date, values)` (atomic append, header preserved,
 trailing-newline safe). A `read_data(path)` returning a DataFrame + basic file health. **Why.**
@@ -130,7 +130,7 @@ Enforce the manual's format rules before they reach `stat.py`.
 - [ ] Valid row appends as the last line; header unchanged; file stays parseable by `data_utils`.
 - [ ] Every invalid case is rejected with a specific reason string.
 
-### Task G3.2 — Data page UI
+### Task G3.2 — Data page UI ✅
 `type:feature` · `layer:ui` · `effort:S`
 **What.** Show the draws table (last rows first), an "Add new draw" form (date picker + 7 number
 inputs) calling the G3.1 helpers, and a success/refresh on append. **Why.** Steps 1 & 4, click-only.
@@ -294,6 +294,18 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Epic G3 complete (G3.1 + G3.2 ✅).** Added `dynamix.webapp.data_io` — pure,
+  Streamlit-free `validate_row` (date `%d/%m/%Y`, exactly 7 whole numbers; clear per-field errors),
+  `append_draw` (validate → **atomic** temp-write + `os.replace`; creates the file with header when
+  missing; header preserved; never concatenates onto the last row), and `read_data` (header + rows +
+  a health note if the header is off). Red→Green `tests/webapp/test_data_io.py` (9 tests, incl. a
+  pandas re-parse under the real date format to prove the file stays loadable). Wired the Data page:
+  draws table (newest first) + an "Add a new draw" form that validates and appends, with a flash
+  message that survives the post-submit rerun. **Live-verified** via `AppTest` against a *temp*
+  DATA.csv (real file untouched): table renders; a valid draw appends as the newest row with a
+  success flash; a bad date is rejected with a clear error and the file is unchanged. (Also switched
+  `st.dataframe` to `width="stretch"` to drop a Streamlit deprecation warning.) Suite: **129 tests,
+  OK (skipped=5)**.
 - 2026-07-01 — **Epic G2 complete (G2.1 + G2.2 ✅).** Added `dynamix.webapp.state` — pure,
   Streamlit-free readers: `data_status` (draws + last date), `latest_statgrid_run` (newest by
   sorted name, matching the orchestrator), `latest_forecast` (newest `forecast.json` by mtime),
