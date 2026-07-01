@@ -352,12 +352,47 @@ def page_optimize(status: "project_state.ProjectStatus") -> None:
     )
 
 
+def page_single(status: "project_state.ProjectStatus") -> None:
+    st.header("Quick single-series")
+    st.write("A fast peek at one series' next values. No training needed — it runs the models directly.")
+
+    if not status.models_installed:
+        st.warning(
+            "The forecasting models are not installed, so results will show **N/A**. "
+            "Install them with `pip install -e .[models]`."
+        )
+
+    ts_cols = data_io.expected_header()[1:]  # TS_1..TS_7
+    c1, c2 = st.columns(2)
+    target = c1.selectbox("Series — `--target`", ["All series"] + ts_cols, index=0, key="ss_target")
+    horizon = c2.number_input(
+        "Steps ahead — `--horizon`", min_value=1, max_value=50, value=5, step=1, key="ss_horizon"
+    )
+
+    with st.expander("Advanced settings"):
+        no_window = st.checkbox("Use the full history — `--no-window`", key="ss_no_window")
+        window = st.number_input(
+            "Training window in rounds — `--window` (0 = default)", min_value=0, value=0, step=1, key="ss_window"
+        )
+
+    options: Dict[str, object] = {"horizon": int(horizon)}
+    if target != "All series":
+        options["target"] = target
+    if no_window:
+        options["no_window"] = True
+    elif int(window) > 0:
+        options["window"] = int(window)
+
+    render_job_panel(key="single", start_label="Run", action="single_series", options=options)
+
+
 PAGES = {
     "Home": page_home,
     "1. Data": page_data,
     "2. Train": page_train,
     "3. Forecast": page_forecast,
     "4. Optimize": page_optimize,
+    "Single series": page_single,
 }
 
 

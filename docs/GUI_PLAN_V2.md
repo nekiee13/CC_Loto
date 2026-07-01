@@ -100,7 +100,7 @@ in a scrollable code block + a download button.
 
 ---
 
-# EPIC V3 — Quick single-series
+# EPIC V3 — Quick single-series  ✅
 `priority:P2` · `type:feature`
 
 **What.** Wrap `run_cli` for a fast per-series peek (no StatGrid needed).
@@ -109,7 +109,7 @@ in a scrollable code block + a download button.
 
 **Definition of done.** The user picks a series + horizon and sees the model outputs.
 
-### Task V3.1 — Single-series page UI
+### Task V3.1 — Single-series page UI ✅
 `type:feature` · `layer:ui` · `effort:S`
 **What.** Target select (`All` or `TS_1..TS_7`), horizon number, window / no-window; **Run** button
 via `render_job_panel` (`single_series` action); show the run's output (the log/table) live. Banner
@@ -185,6 +185,15 @@ v1 (done) ─▶ V1 (optimize+score) ─▶ V4 (charts)
 
 ## Progress log
 
+- 2026-07-01 — **Epic V3 complete (V3.1 ✅).** Added the **Single series** page (wraps `run_cli` via
+  the existing `single_series` runner action): a series selector (`All series` or `TS_1..TS_7`), a
+  horizon input, an Advanced expander (`--no-window` / `--window`), and a **Run** button through
+  `render_job_panel` that streams the model output live; a models-missing banner when the forecast
+  deps are absent (output would be `N/A`). No StatGrid needed. **Live-verified** via `AppTest`: page
+  renders, models-missing banner shows, and selecting `TS_3` + horizon 7 + no-window produces the
+  exact argv `… -m dynamix.entrypoints.run_cli --target TS_3 --horizon 7 --no-window` (capturing
+  monkeypatch, no real run). UI-only; argv covered by the G4 runner tests. Suite: **155 tests, OK
+  (skipped=5)**.
 - 2026-07-01 — **Epic V1 complete (V1.1 + V1.2 ✅).** Added `dynamix.webapp.optimize_results` —
   pure, Streamlit-free `load_summary(path) -> SummaryView` parsing the optimizer's
   `summary_current.json` (`opt_diagnostics.write_final_summary`, under `Output/Reports/Optimization/`):
