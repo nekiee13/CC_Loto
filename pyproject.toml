@@ -25,7 +25,8 @@ dependencies = [
 # Each model family fails soft when absent (a missing dep disables that model, not the pipeline).
 milp = ["pulp>=2.7"]
 models = ["chaospy>=4.3", "torch>=2.2", "darts>=0.30"]
-gui = []  # tkinter ships with CPython; on Linux install the system package python3-tk
+gui = ["streamlit>=1.36"]  # Streamlit GUI (dynamix-gui). The legacy Tkinter GUI needs no pip dep
+                           # (tkinter ships with CPython; on Linux install system python3-tk).
 dev = ["coverage>=7.0"]
 
 [project.scripts]
@@ -35,6 +36,7 @@ dynamix-cli = "dynamix.entrypoints.run_cli:main"
 dynamix-stat = "dynamix.stat:main"
 dynamix-opt = "dynamix.entrypoints.orchestrator:main"
 dynamix-report = "dynamix.entrypoints.stat_report:main"
+dynamix-gui = "dynamix.webapp.launch:main"  # Streamlit GUI launcher (needs the [gui] extra)
 
 [tool.setuptools.packages.find]
 # Mixed layout (to be unified in E2.2): `dynamix` is a namespace package under src/,

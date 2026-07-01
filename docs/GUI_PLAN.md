@@ -34,7 +34,7 @@ single-series, charts/exports (listed at the end as a backlog).
 
 ---
 
-# EPIC G1 — Scaffolding & packaging
+# EPIC G1 — Scaffolding & packaging  ✅
 `priority:P0` · `type:chore`
 
 **What.** Create the `webapp` package, the `[gui]` dependency extra, a `dynamix-gui` launcher, and a
@@ -44,7 +44,7 @@ that installs cleanly and does not disturb core installs.
 **Definition of done.** `pip install -e .[gui]` installs Streamlit; `dynamix-gui` opens the app; the
 core suite still passes without the extra.
 
-### Task G1.1 — Package + dependency + launcher
+### Task G1.1 — Package + dependency + launcher ✅
 `type:chore` · `layer:packaging` · `effort:S`
 **What.** Add `src/dynamix/webapp/__init__.py`; add `streamlit>=1.36` to the `[gui]` extra in
 `pyproject.toml`; add console script `dynamix-gui = "dynamix.webapp.launch:main"` where `launch.py`
@@ -59,7 +59,7 @@ shells `streamlit run <app.py>`; add a repo-root `app.py` shim (`streamlit run a
 - [ ] `dynamix-gui` and `streamlit run app.py` both launch the app.
 - [ ] Helper modules import with `streamlit` uninstalled (test green).
 
-### Task G1.2 — App shell (nav + layout)
+### Task G1.2 — App shell (nav + layout) ✅
 `type:feature` · `layer:ui` · `effort:S`
 **What.** `app.py` with a sidebar page selector (Home, Data, Train, Forecast), app title, and a
 placeholder Project-Status panel. Wire empty page functions. **Why.** A navigable frame to fill in.
@@ -290,3 +290,19 @@ parallel once status exists).
 - **Quick single-series** — wrap `run_cli --target/--horizon`.
 - **Charts/exports** — calibration/ROI plots, richer downloads.
 - **Retire Tkinter** — once Streamlit covers the full workflow.
+
+## Progress log
+
+- 2026-07-01 — **Epic G1 complete (G1.1 + G1.2 ✅).** Added the `src/dynamix/webapp/` package
+  (`__init__.py`, `launch.py`, `app.py`), a repo-root `app.py` shim, the `dynamix-gui` console
+  script, and `streamlit>=1.36` in the `[gui]` extra. `launch.py` shells `python -m streamlit run
+  app.py` and degrades gracefully with a clear hint when Streamlit is absent (verified: prints the
+  hint, returns 1). `app.py` is the shell: title, sidebar step-nav (Home/Data/Train/Forecast),
+  placeholder status panel, stub page bodies (guarded by `if __name__ == "__main__"` so it renders
+  only under `streamlit run`). Red test `tests/integration/test_gui_packaging.py` (webapp + launcher
+  import without Streamlit; pyproject declares the extra + script; root shim exists) — green.
+  **Live-verified** after `pip install -e .[gui]` (Streamlit 1.58): `dynamix-gui` registered; a
+  headless `streamlit.testing.v1.AppTest` render loads with no exception, shows the title, exposes
+  the 4-step sidebar nav, and navigates all four pages cleanly. Suite: **114 tests, OK (skipped=5)**
+  (the "imports without streamlit" guard still holds — our modules never import Streamlit outside
+  `app.py`).
