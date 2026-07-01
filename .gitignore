@@ -65,3 +65,6 @@ temp/
 
 # Project generated output folder
 Output/
+
+# External DynaMix model repo — cloned/placed here at runtime, not tracked in git
+DynaMix-python/

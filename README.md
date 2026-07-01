@@ -41,6 +41,12 @@ Date,TS_1,TS_2,TS_3,TS_4,TS_5,TS_6,TS_7
 Each row is treated as one event (`INDEX_MODE = "event"`): order is identity, dates are
 metadata, and duplicate dates are allowed. You update `DATA.csv` over time as new draws occur.
 
+**Data policy:** `DATA.csv` is tracked in git as the canonical reference draw history — it is
+public lottery-draw results (no secrets or personal data), so it ships with the repo and is
+updated in place. It is the single required input; the test suite and pipeline assume it exists
+at the repo root. Point elsewhere with the `DYNAMIX_DATA_FILE` environment variable if you keep
+your operational history outside the repo.
+
 ## Usage
 
 ```bash
@@ -100,6 +106,13 @@ docs/                  Architecture notes
 
 ## Notes
 
-All entrypoints bootstrap `src/` onto `sys.path` and import the forecasting library via
-`from dynamix import ...`. `orchestrator.py` loads the repo-root `stat.py` by file path (not
-`import stat`, which would resolve to the Python standard-library `stat` module).
+Entrypoints import the forecasting library via `from dynamix import ...` (run `pip install -e .`
+so `dynamix`/`opt` resolve without `sys.path` hacks). The backtest module is `dynamix.stat`
+(renamed out of the repo root so a plain `import stat` no longer collides with the standard
+library).
+
+**`DynaMix-python/` placeholder:** this directory holds the *external* DynaMix HuggingFace model
+repo, which `src/dynamix/dynamix_core.py` adds to `sys.path` at runtime. It is not tracked in git
+(gitignored) — clone or place the external repo there yourself if you want the DynaMix model
+family. When absent, that model family fails soft (disabled with a warning); the rest of the
+pipeline runs normally.

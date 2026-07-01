@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E8.1/E8.2 done)_
+_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E8.1/E8.2/E8.3 done)_
 
 ---
 
@@ -22,8 +22,8 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | 🟡 Partial | 1 / 2 | E6.1 done; E6.2 optional |
 | E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
-| E8 — Cleanup & polish | P3 | 🟡 Partial | 2 / 4 | Anytime |
-| **Total** | | **🟡** | **18 / 21** | |
+| E8 — Cleanup & polish | P3 | 🟡 Partial | 3 / 4 | Anytime |
+| **Total** | | **🟡** | **19 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -81,7 +81,7 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E
 |------|--------|-------|-------------|-------|
 | E8.1 Unify on `logging` | ✅ | — | (uncommitted) | `[OPT]`/`[STAT]` progress → module loggers; `--quiet` maps to level |
 | E8.2 Prune config aliases | ✅ | — | (uncommitted) | removed PROJECT_ROOT/OUTPUT_PLOTS_DIR/DARTS_EPOCHS; readers repointed to canonical |
-| E8.3 Committed artifacts | ⬜ | — | — | `DynaMix-python/`, `DATA.csv` |
+| E8.3 Committed artifacts | ✅ | — | (uncommitted) | untracked DynaMix-python gitlink + gitignore + README; DATA.csv kept, policy stated |
 | E8.4 Scope determinism guarantee | ⬜ | — | — | SRS NFR-9 |
 
 ---
@@ -95,6 +95,18 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E8.3 done → committed-artifact hygiene (E8 now 3/4).** `DynaMix-python/` was
+  committed as a *dangling gitlink* (git mode `160000`, a submodule pointer) with no `.gitmodules`
+  — cloning produced a confusing empty submodule whose commit couldn't resolve. Untracked it
+  (`git rm --cached DynaMix-python`), added `DynaMix-python/` to `.gitignore` (the external DynaMix
+  repo is placed there at runtime and loaded onto `sys.path` by `dynamix_core`), and documented the
+  placeholder's purpose in the README (fails soft when absent). `DATA.csv` policy decision (user
+  choice): **kept in git** as the canonical reference draw history — it's public lottery results
+  (no secrets/PII), the single required input the suite/pipeline assume at repo root; README now
+  states this and points at `DYNAMIX_DATA_FILE` for out-of-repo history. Red test
+  `tests/contract/test_repo_artifacts.py`: no committed gitlinks (scans `git ls-files -s` for mode
+  `160000`; skips if git absent), `DynaMix-python/` gitignored, and README documents both policies.
+  Suite: **107 tests, OK (skipped=5)**. **19 / 21**.
 - 2026-07-01 — **E8.2 done → pruned dead config aliases (E8 now 2/4).** Removed three
   backward-compat aliases from `constants.py`: `PROJECT_ROOT` (→ `REPO_ROOT`), `OUTPUT_PLOTS_DIR`
   (→ `OUTPUT_GRAPHS_DIR`), `DARTS_EPOCHS` (→ `DARTS_N_EPOCHS`). The plan's "nothing reads them"
