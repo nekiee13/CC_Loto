@@ -20,6 +20,7 @@ import streamlit as st
 
 from dynamix.webapp import data_io
 from dynamix.webapp import optimize_results
+from dynamix.webapp import report_io
 from dynamix.webapp import results as forecast_results
 from dynamix.webapp import runner
 from dynamix.webapp import state as project_state
@@ -386,12 +387,56 @@ def page_single(status: "project_state.ProjectStatus") -> None:
     render_job_panel(key="single", start_label="Run", action="single_series", options=options)
 
 
+def _render_latest_report() -> None:
+    path = report_io.latest_report()
+    text = report_io.read_report(path)
+    if not text:
+        st.info("No report file found yet.")
+        return
+    st.subheader("Report")
+    st.code(text, language="text")
+    st.download_button(
+        "Download report (.txt)", text, file_name=path.name if path else "report.txt", mime="text/plain"
+    )
+
+
+def page_reports(status: "project_state.ProjectStatus") -> None:
+    st.header("Reports")
+    st.write(
+        "Make a readable report from a training checkpoint: how often it hit, and the near-misses."
+    )
+    if not status.has_training:
+        st.warning("No training yet. Do a **full training** on the Train page first (Step 2).")
+        return
+
+    checkpoint = st.text_input("Checkpoint — `--checkpoint`", value="latest", key="rep_ckpt")
+    with st.expander("Advanced settings"):
+        show_multihit = st.checkbox("Show every near-miss — `--show-multihit`", key="rep_multi")
+        max_per_hit = st.number_input(
+            "Limit rows per win level — `--max-per-hit` (0 = all)", min_value=0, value=0, step=1, key="rep_max"
+        )
+    options: Dict[str, object] = {"checkpoint": (checkpoint or "").strip() or "latest"}
+    if show_multihit:
+        options["show_multihit"] = True
+    if int(max_per_hit) > 0:
+        options["max_per_hit"] = int(max_per_hit)
+
+    render_job_panel(
+        key="report",
+        start_label="Generate report",
+        action="report",
+        options=options,
+        on_success=_render_latest_report,
+    )
+
+
 PAGES = {
     "Home": page_home,
     "1. Data": page_data,
     "2. Train": page_train,
     "3. Forecast": page_forecast,
     "4. Optimize": page_optimize,
+    "Reports": page_reports,
     "Single series": page_single,
 }
 

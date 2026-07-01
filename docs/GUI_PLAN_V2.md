@@ -69,7 +69,7 @@ plain-language summary. CSV download.
 
 ---
 
-# EPIC V2 — Reports page
+# EPIC V2 — Reports page  ✅
 `priority:P2` · `type:feature`
 
 **What.** Wrap `stat_report` so the user can render a human-readable report from a training
@@ -81,7 +81,7 @@ CLI-only.
 **Definition of done.** The user picks a checkpoint (default latest), runs the report, and reads
 it in the page.
 
-### Task V2.1 — Report locator (pure)
+### Task V2.1 — Report locator (pure) ✅
 `type:feature` · `layer:webapp` · `effort:S`
 **What.** Helper to find the newest report file `stat_report` writes (under
 `Output/Reports/...`), returning its path + text. Degrades safely when absent.
@@ -90,7 +90,7 @@ it in the page.
 **Acceptance criteria**
 - [ ] Newest report resolved by mtime; missing dir → clean "no report yet".
 
-### Task V2.2 — Reports page UI
+### Task V2.2 — Reports page UI ✅
 `type:feature` · `layer:ui` · `effort:S`
 **What.** Checkpoint text input (default `latest`); Advanced (`--show-multihit`, `--max-per-hit`);
 **Generate report** button via `render_job_panel`; on success render the report text (from V2.1)
@@ -185,6 +185,16 @@ v1 (done) ─▶ V1 (optimize+score) ─▶ V4 (charts)
 
 ## Progress log
 
+- 2026-07-01 — **Epic V2 complete (V2.1 + V2.2 ✅).** Added `dynamix.webapp.report_io` — pure,
+  Streamlit-free `latest_report(reports_dir)` (newest `report_*.txt` under `Output/Reports/` by
+  mtime, ignoring non-report files) and `read_report(path)`; missing dir/file → `None`. Red→Green
+  `tests/webapp/test_report_io.py` (4 tests). Added the gated **Reports** page: a checkpoint input
+  (default `latest`), Advanced (`--show-multihit`, `--max-per-hit`), a **Generate report** button
+  via `render_job_panel`, and an on-success renderer that shows the newest report text in a code
+  block + `.txt` download. **Live-verified** via `AppTest` over temp `DYNAMIX_OUTPUT_DIR`: no
+  StatGrid → gate + no button; with training + a `report_*.txt`, the Generate button appears, ticking
+  show-multihit yields argv `… -m dynamix.entrypoints.stat_report --checkpoint latest --show-multihit`,
+  and an injected finished job renders the report text. Suite: **159 tests, OK (skipped=5)**.
 - 2026-07-01 — **Epic V3 complete (V3.1 ✅).** Added the **Single series** page (wraps `run_cli` via
   the existing `single_series` runner action): a series selector (`All series` or `TS_1..TS_7`), a
   horizon input, an Advanced expander (`--no-window` / `--window`), and a **Run** button through
