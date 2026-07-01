@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-06-29 (E1 + E2 + E4 + E5 epics complete; E3.1/E3.2 done)_
+_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 epics complete; E3.1/E3.2 done)_
 
 ---
 
@@ -21,9 +21,9 @@ _Last updated: 2026-06-29 (E1 + E2 + E4 + E5 epics complete; E3.1/E3.2 done)_
 | E4 — Decompose `stat.py` | P1 | ✅ Done | 2 / 2 | `dynamix.candidate_grid` extracted; golden-locked; stat re-exports |
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
-| E7 — De-dupe rounding storage | P2 | ⬜ Todo | 0 / 1 | Behind flag |
+| E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **14 / 21** | |
+| **Total** | | **🟡** | **15 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -74,7 +74,7 @@ _Last updated: 2026-06-29 (E1 + E2 + E4 + E5 epics complete; E3.1/E3.2 done)_
 ### E7 — De-dupe rounding storage `P2`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E7.1 Distinct-value grid encoding (flagged) | ⬜ | — | — | depends on E4, E1 |
+| E7.1 Distinct-value grid encoding (flagged) | ✅ | — | (uncommitted) | `--statgrid-dedupe`; re-expanded losslessly on load |
 
 ### E8 — Cleanup & polish `P3`
 | Task | Status | Owner | PR / Commit | Notes |
@@ -95,6 +95,20 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E7.1 done → Epic E7 complete (1/1).** Distinct-value candidate-grid encoding
+  behind the `--statgrid-dedupe` exporter flag. The 7 rounding modes only differ at `.5`
+  boundaries, so a `(dataset_index, ts, model)` cell usually yields ≪7 distinct `rounded`
+  integers; storing one row per distinct value cuts export/disk I/O ~7×. Added
+  `dedupe_candidate_grid_rows` + `build_candidate_grid_rows_deduped` to `dynamix.candidate_grid`
+  (collapse by `(dataset_index, ts, model, rounded)`, carry sorted `rounding_ids` e.g. `"1,3,5,6"`,
+  representative `rounding_id = min`), and `expand_deduped_grid` to `opt.opt_data` (wired into
+  `load_statgrid_run` right after the part concat). **Hard invariant — optimizer input unchanged:**
+  the candidate features (`consensus_count`, abs_err percentile, rank) depend on row multiplicity,
+  so the load path re-explodes each deduped row back to one row per rid and re-sorts to the exact
+  legacy order (cells by first appearance, ids ascending) — byte-for-byte identical. `expand_` is a
+  pure pass-through when `rounding_ids` is absent (legacy grids untouched). Red test
+  `tests/contract/test_grid_dedupe.py` (4 cases: no distinct value lost, strict row-count drop,
+  round-trip identity, legacy pass-through) drove it. Suite: **100 tests, OK (skipped=5)**. **15 / 21**.
 - 2026-06-29 — **E4 epic complete (2/2) → `stat.py` decomposed.** E4.1: added
   `tests/contract/test_candidate_grid_golden.py` with a committed golden JSON snapshot of
   `build_candidate_grid_rows` (2 TS × 2 models × 7 rounding modes; preds on `.5` boundaries so all

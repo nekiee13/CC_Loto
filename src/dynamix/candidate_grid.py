@@ -335,3 +335,50 @@ def build_candidate_grid_rows(
                 )
 
     return rows
+
+
+def dedupe_candidate_grid_rows(rows: List[ExportRow]) -> List[ExportRow]:
+    """
+    Collapse legacy per-rounding-mode rows to one row per distinct candidate value.
+
+    The 7 rounding modes mostly agree (they differ only at .5 boundaries), so a cell
+    ``(dataset_index, ts, model)`` typically yields far fewer than 7 distinct ``rounded``
+    integers. We keep one representative row per ``(dataset_index, ts, model, rounded)``
+    group and carry the full set of rounding ids that produced it in a new ``rounding_ids``
+    column (sorted, comma-joined, e.g. ``"1,3,5,6"``). The representative ``rounding_id`` is
+    the minimum id in the group, preserving deterministic ordering.
+
+    Every other field (``pred``, ``rounded``, ``true``, ``hit``, ``abs_err``, ...) is constant
+    within a group, so this is lossless: :func:`opt.opt_data.expand_deduped_grid` reconstructs
+    the legacy rows byte-for-byte. Output order follows first appearance, which matches the
+    legacy emission order (cells in TS_LIST x MODEL_NAMES order; values in ascending rid order).
+    """
+    groups: Dict[tuple, Dict[str, Any]] = {}
+    order: List[tuple] = []
+    for r in rows:
+        key = (int(r["dataset_index"]), str(r["ts"]), str(r["model"]), int(r["rounded"]))
+        g = groups.get(key)
+        if g is None:
+            g = {"template": dict(r), "rids": []}
+            groups[key] = g
+            order.append(key)
+        g["rids"].append(int(r["rounding_id"]))
+
+    out: List[ExportRow] = []
+    for key in order:
+        g = groups[key]
+        rids = sorted(g["rids"])
+        row = dict(g["template"])
+        row["rounding_id"] = int(rids[0])
+        row["rounding_ids"] = ",".join(str(x) for x in rids)
+        out.append(row)  # type: ignore[arg-type]
+    return out
+
+
+def build_candidate_grid_rows_deduped(**kwargs: Any) -> List[ExportRow]:
+    """Distinct-value encoding of :func:`build_candidate_grid_rows` (E7.1).
+
+    Identical signature; returns the deduped rows (one per distinct candidate value, with a
+    ``rounding_ids`` column). Guarded behind the ``--statgrid-dedupe`` exporter flag.
+    """
+    return dedupe_candidate_grid_rows(build_candidate_grid_rows(**kwargs))

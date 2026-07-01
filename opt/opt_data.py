@@ -39,6 +39,40 @@ def list_run_ids(cfg: OptConfig) -> List[str]:
     return sorted([p.name for p in root.iterdir() if p.is_dir()])
 
 
+def expand_deduped_grid(grid: pd.DataFrame) -> pd.DataFrame:
+    """
+    Re-expand a distinct-value (E7.1) grid back to legacy per-rounding-mode rows.
+
+    A deduped grid (produced by ``build_candidate_grid_rows_deduped``) stores one row per
+    distinct ``(dataset_index, ts, model, rounded)`` value, carrying the set of rounding ids
+    that produced it in a ``rounding_ids`` column. The optimizer's candidate features
+    (``consensus_count``, abs_err percentile, rank) depend on row multiplicity, so the grid
+    must be expanded back to exactly one row per rounding id before scoring.
+
+    If ``rounding_ids`` is absent the grid is already legacy-shaped and is returned unchanged
+    (pass-through). Otherwise each row is exploded into one row per id, ``rounding_id`` is set
+    to that id, the ``rounding_ids`` column is dropped, and rows are re-sorted to the legacy
+    emission order: cells in first-appearance (TS_LIST x MODEL_NAMES) order, values ascending
+    by ``rounding_id`` within each cell. This reproduces the legacy grid byte-for-byte.
+    """
+    if "rounding_ids" not in grid.columns:
+        return grid
+
+    work = grid.copy()
+    work["rounding_id"] = work["rounding_ids"].apply(
+        lambda s: [int(x) for x in str(s).split(",") if str(x).strip() != ""]
+    )
+    work = work.drop(columns=["rounding_ids"])
+    work = work.explode("rounding_id", ignore_index=True)
+    work["rounding_id"] = pd.to_numeric(work["rounding_id"], errors="coerce").astype(int)
+
+    # Restore legacy ordering: group cells by first appearance, sort ids ascending within cell.
+    work["_grp"] = work.groupby(["dataset_index", "ts", "model"], sort=False).ngroup()
+    work = work.sort_values(["_grp", "rounding_id"], kind="stable").drop(columns=["_grp"])
+    work = work.reset_index(drop=True)
+    return work
+
+
 def load_statgrid_run(cfg: OptConfig, run_id: str) -> pd.DataFrame:
     """
     Loads a StatGrid run folder:
@@ -73,6 +107,7 @@ def load_statgrid_run(cfg: OptConfig, run_id: str) -> pd.DataFrame:
             dfs.append(pd.read_csv(p))
 
     grid = pd.concat(dfs, axis=0, ignore_index=True)
+    grid = expand_deduped_grid(grid)
     if grid.empty:
         raise ValueError(f"Loaded grid is empty for run_id={run_id} under {run_dir}")
 

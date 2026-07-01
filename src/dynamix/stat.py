@@ -93,6 +93,7 @@ from dynamix.candidate_grid import (  # type: ignore  # noqa: E402
     _forecast_single_series,
     collect_model_forecasts_for_step,
     build_candidate_grid_rows,
+    build_candidate_grid_rows_deduped,
 )
 
 
@@ -889,6 +890,7 @@ def rebuild_full_export_from_checkpoint_coverage(
     export_mode: str,
     effective_window: int,
     export_end_index_inclusive: int,
+    dedupe: bool = False,
 ) -> None:
     """
     Recompute forecasts and export candidate grid for indices:
@@ -896,6 +898,7 @@ def rebuild_full_export_from_checkpoint_coverage(
 
     This is required because checkpoints do not store per-step model predictions.
     """
+    _build = build_candidate_grid_rows_deduped if dedupe else build_candidate_grid_rows
     if export_end_index_inclusive < MIN_STAT_HISTORY:
         log.info("[STAT-EXPORT] Full rebuild skipped: export_end_index_inclusive < MIN_STAT_HISTORY.")
         return
@@ -933,7 +936,7 @@ def rebuild_full_export_from_checkpoint_coverage(
             _dummy_state: Dict[str, Any] = {"error_counts": init_error_counts(), "recent_errors": []}
             _log_worker_errors(worker_errors, state=_dummy_state, dataset_index=i, step_num=n)
 
-        rows = build_candidate_grid_rows(
+        rows = _build(
             run_id=export_run_id,
             export_mode=export_mode,
             model_forecasts=forecasts,
@@ -959,7 +962,8 @@ def rebuild_full_export_from_checkpoint_coverage(
 # ----------------------------------------------------------------------
 # Main backtest
 # ----------------------------------------------------------------------
-def run_statistics(resume_arg: Optional[str], export_mode: str) -> None:
+def run_statistics(resume_arg: Optional[str], export_mode: str, dedupe: bool = False) -> None:
+    _build = build_candidate_grid_rows_deduped if dedupe else build_candidate_grid_rows
     DU.ensure_output_dirs()
     logs_dir: Path = Path(getattr(C, "OUTPUT_LOGS_DIR", Path("Output") / "Logs"))
     log_path = _setup_stat_logging(logs_dir)
@@ -1163,6 +1167,7 @@ def run_statistics(resume_arg: Optional[str], export_mode: str) -> None:
                         export_mode="full",
                         effective_window=effective_window,
                         export_end_index_inclusive=export_end,
+                        dedupe=dedupe,
                     )
                 else:
                     log.info("[STAT-EXPORT] FULL mode: no checkpoint coverage to rebuild (start is at MIN_STAT_HISTORY).")
@@ -1203,7 +1208,7 @@ def run_statistics(resume_arg: Optional[str], export_mode: str) -> None:
                 # Export (incremental export of new steps; full mode also exports new steps)
                 if exporter is not None:
                     try:
-                        rows = build_candidate_grid_rows(
+                        rows = _build(
                             run_id=export_run_id,
                             export_mode=export_mode,
                             model_forecasts=forecasts,
@@ -1349,8 +1354,14 @@ def main() -> None:
         choices=list(EXPORT_MODE_VALUES),
         help="StatGrid export mode: none|incremental|full",
     )
+    parser.add_argument(
+        "--statgrid-dedupe",
+        action="store_true",
+        help="Store one row per distinct candidate value (carries rounding_ids); "
+             "re-expanded losslessly on load. Cuts export I/O ~7x.",
+    )
     args = parser.parse_args()
-    run_statistics(args.resume, args.statgrid_export)
+    run_statistics(args.resume, args.statgrid_export, dedupe=args.statgrid_dedupe)
 
 
 if __name__ == "__main__":
