@@ -64,17 +64,17 @@ C = _import_constants_module()
 class TestConstants(unittest.TestCase):
     """Test suite for constants configuration."""
 
-    def test_project_root_exists(self) -> None:
-        """Verify PROJECT_ROOT path is valid."""
-        self.assertTrue(hasattr(C, "PROJECT_ROOT"), "Constants should define PROJECT_ROOT")
-        project_root = Path(getattr(C, "PROJECT_ROOT"))
-        self.assertTrue(project_root.exists(), "PROJECT_ROOT should exist")
-        self.assertTrue(project_root.is_dir(), "PROJECT_ROOT should be a directory")
+    def test_repo_root_exists(self) -> None:
+        """Verify REPO_ROOT path is valid."""
+        self.assertTrue(hasattr(C, "REPO_ROOT"), "Constants should define REPO_ROOT")
+        repo_root = Path(getattr(C, "REPO_ROOT"))
+        self.assertTrue(repo_root.exists(), "REPO_ROOT should exist")
+        self.assertTrue(repo_root.is_dir(), "REPO_ROOT should be a directory")
 
     def test_required_paths_defined(self) -> None:
         """Verify all required path constants are defined."""
         required_paths = [
-            "PROJECT_ROOT",
+            "REPO_ROOT",
             "DATA_FILE",
             "OUTPUT_DIR",
             "OUTPUT_GRAPHS_DIR",

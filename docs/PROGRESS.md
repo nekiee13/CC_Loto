@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E8.1 done)_
+_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E8.1/E8.2 done)_
 
 ---
 
@@ -22,8 +22,8 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
 | E6 — Resolve evolutionary stub | P2 | 🟡 Partial | 1 / 2 | E6.1 done; E6.2 optional |
 | E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
-| E8 — Cleanup & polish | P3 | 🟡 Partial | 1 / 4 | Anytime |
-| **Total** | | **🟡** | **17 / 21** | |
+| E8 — Cleanup & polish | P3 | 🟡 Partial | 2 / 4 | Anytime |
+| **Total** | | **🟡** | **18 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -80,7 +80,7 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 + E
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
 | E8.1 Unify on `logging` | ✅ | — | (uncommitted) | `[OPT]`/`[STAT]` progress → module loggers; `--quiet` maps to level |
-| E8.2 Prune config aliases | ⬜ | — | — | prove non-use first |
+| E8.2 Prune config aliases | ✅ | — | (uncommitted) | removed PROJECT_ROOT/OUTPUT_PLOTS_DIR/DARTS_EPOCHS; readers repointed to canonical |
 | E8.3 Committed artifacts | ⬜ | — | — | `DynaMix-python/`, `DATA.csv` |
 | E8.4 Scope determinism guarantee | ⬜ | — | — | SRS NFR-9 |
 
@@ -95,6 +95,20 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E8.2 done → pruned dead config aliases (E8 now 2/4).** Removed three
+  backward-compat aliases from `constants.py`: `PROJECT_ROOT` (→ `REPO_ROOT`), `OUTPUT_PLOTS_DIR`
+  (→ `OUTPUT_GRAPHS_DIR`), `DARTS_EPOCHS` (→ `DARTS_N_EPOCHS`). The plan's "nothing reads them"
+  premise held only for `OUTPUT_PLOTS_DIR`; `PROJECT_ROOT` was read by `data_utils` (+ asserted by
+  `test_constants`) and `DARTS_EPOCHS` by `darts_core` and the `fix_darts_install` maintenance tool
+  — all via `getattr(C, …, fallback)`. To satisfy the AC ("zero references before deletion") without
+  losing behavior, the readers were first repointed to the canonical constants (the aliases were
+  exact duplicates, so behavior is identical): `data_utils` → `REPO_ROOT`, `darts_core` →
+  `DARTS_N_EPOCHS`, `fix_darts_install` → `DARTS_N_EPOCHS` (local var renamed too), `test_constants`
+  → `REPO_ROOT`, and stale `dynamix_core` doc comments updated. Red test
+  `tests/contract/test_no_dead_config_aliases.py` pins both halves: the names are no longer defined
+  on `constants`, and no source under `opt/` + `src/dynamix/` + `tools/` references them. (The
+  unrelated module-local `PROJECT_ROOT` in `tests/test_checkpoint_loop.py` is a different symbol and
+  out of scan scope.) Suite: **104 tests, OK (skipped=5)**. **18 / 21**.
 - 2026-07-01 — **E8.1 done → long-run output unified on `logging` (E8 now 1/4).** Replaced the
   `[OPT]` (orchestrator, 71 sites incl. multi-line) and `[STAT]` (`dynamix.stat` backtest, 10 sites;
   `candidate_grid` darts fail-soft warning) `print()` calls with module loggers. Orchestrator gains

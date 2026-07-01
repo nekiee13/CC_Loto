@@ -13,7 +13,7 @@ Responsibilities:
 
 Key fixes (v1.3 refactor compatibility):
 - Robust intra-package imports (src/dynamix/*).
-- Robust resolution of DynaMix repo path even if constants.PROJECT_ROOT points to src/dynamix.
+- Robust resolution of DynaMix repo path even if constants.REPO_ROOT points to src/dynamix.
 - Event-mode forecast index uses relative steps (ForecastStep=1..H) by default, with an optional
   anchor-to-last-event-id behavior if enabled in constants.
 
@@ -93,8 +93,8 @@ def _resolve_dynamix_repo_dir() -> Path:
     Robustly resolve the DynaMix-python repo path.
 
     Why this exists:
-    - If constants.PROJECT_ROOT is set to src/dynamix, then constants.DYNAMIX_REPO_DIR
-      defined as PROJECT_ROOT / "DynaMix-python" would incorrectly point to:
+    - If constants.REPO_ROOT is set to src/dynamix, then constants.DYNAMIX_REPO_DIR
+      defined as REPO_ROOT / "DynaMix-python" would incorrectly point to:
         <repo>/src/dynamix/DynaMix-python
       instead of:
         <repo>/DynaMix-python

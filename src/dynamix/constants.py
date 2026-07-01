@@ -39,9 +39,6 @@ MODULE_DIR: Path = Path(__file__).resolve().parent
 SRC_DIR: Path = MODULE_DIR.parent
 REPO_ROOT: Path = SRC_DIR.parent
 
-# Compatibility alias (older code may expect PROJECT_ROOT)
-PROJECT_ROOT: Path = REPO_ROOT
-
 
 # ----------------------------------------------------------------------
 # 1. Project and filesystem layout
@@ -57,9 +54,6 @@ OUTPUT_REPORTS_DIR: Path = OUTPUT_DIR / "Reports"
 OUTPUT_GRAPHS_DIR: Path = OUTPUT_REPORTS_DIR / "Graphs"  # prefer Reports/Graphs now
 OUTPUT_LOGS_DIR: Path = OUTPUT_DIR / "Logs"
 OUTPUT_STATS_DIR: Path = OUTPUT_DIR / "Stats"
-
-# Compatibility aliases (some older modules may still refer to these)
-OUTPUT_PLOTS_DIR: Path = OUTPUT_GRAPHS_DIR
 
 # Model cache
 MODEL_CACHE_DIR: Path = REPO_ROOT / "model_cache"
@@ -87,7 +81,6 @@ if _env_out:
     OUTPUT_GRAPHS_DIR = OUTPUT_REPORTS_DIR / "Graphs"
     OUTPUT_LOGS_DIR = OUTPUT_DIR / "Logs"
     OUTPUT_STATS_DIR = OUTPUT_DIR / "Stats"
-    OUTPUT_PLOTS_DIR = OUTPUT_GRAPHS_DIR
 
 _env_cache = os.environ.get("DYNAMIX_MODEL_CACHE_DIR", "").strip()
 if _env_cache:
@@ -212,8 +205,6 @@ DARTS_OUTPUT_CHUNK_LENGTH: int = FH
 
 # Training epochs
 DARTS_N_EPOCHS: int = 150
-# Backward-compat alias: some wrappers read DARTS_EPOCHS
-DARTS_EPOCHS: int = DARTS_N_EPOCHS
 
 DARTS_DEVICE: str = DYNAMIX_DEVICE
 

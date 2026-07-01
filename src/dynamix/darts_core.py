@@ -175,7 +175,7 @@ def _make_event_forecast_index(fh: int) -> pd.RangeIndex:
 def _get_common_darts_hparams(forecast_horizon: int) -> Dict[str, Any]:
     in_len = int(getattr(C, "DARTS_INPUT_CHUNK_LENGTH", 12))
     out_len = int(getattr(C, "DARTS_OUTPUT_CHUNK_LENGTH", max(1, int(forecast_horizon))))
-    n_epochs = int(getattr(C, "DARTS_EPOCHS", getattr(C, "DARTS_N_EPOCHS", 100)))
+    n_epochs = int(getattr(C, "DARTS_N_EPOCHS", 100))
     batch_size = int(getattr(C, "DARTS_BATCH_SIZE", 32))
     random_state = int(getattr(C, "DARTS_RANDOM_STATE", 42))
 

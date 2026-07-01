@@ -221,7 +221,7 @@ DARTS_ENABLED: bool = bool(getattr(C, "DARTS_ENABLED", True))
 
 DEFAULT_FH: int = int(getattr(C, "FH", 1))
 
-DARTS_EPOCHS: int = int(getattr(C, "DARTS_EPOCHS", 50))
+DARTS_N_EPOCHS: int = int(getattr(C, "DARTS_N_EPOCHS", 50))
 DARTS_BATCH_SIZE: int = int(getattr(C, "DARTS_BATCH_SIZE", 32))
 DARTS_LEARNING_RATE: float = float(getattr(C, "DARTS_LEARNING_RATE", 1e-3))
 DARTS_DROPOUT: float = float(getattr(C, "DARTS_DROPOUT", 0.1))
@@ -383,7 +383,7 @@ def _build_model(model_type: str) -> Any:
     common_kwargs: Dict[str, Any] = dict(
         input_chunk_length=int(DARTS_INPUT_CHUNK_LENGTH),
         output_chunk_length=int(DARTS_OUTPUT_CHUNK_LENGTH),
-        n_epochs=int(DARTS_EPOCHS),
+        n_epochs=int(DARTS_N_EPOCHS),
         batch_size=int(DARTS_BATCH_SIZE),
         optimizer_kwargs={"lr": float(DARTS_LEARNING_RATE)},
         dropout=float(DARTS_DROPOUT),

@@ -90,7 +90,7 @@ def ensure_output_dirs() -> None:
     - Partial constants (falls back to repo-relative defaults)
     """
     try:
-        root = getattr(C, "PROJECT_ROOT", _repo_root())
+        root = getattr(C, "REPO_ROOT", _repo_root())
         root = Path(root)
 
         output_dir = Path(getattr(C, "OUTPUT_DIR", root / "Output"))
