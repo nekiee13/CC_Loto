@@ -141,7 +141,7 @@ inputs) calling the G3.1 helpers, and a success/refresh on append. **Why.** Step
 
 ---
 
-# EPIC G4 — Job runner & live logs
+# EPIC G4 — Job runner & live logs  ✅
 `priority:P0` · `type:feature`
 
 **What.** The subprocess engine: build a CLI command from an action + flags, run it, stream logs live,
@@ -151,8 +151,8 @@ Train/Forecast action goes through it.
 **Definition of done.** Any wrapped CLI runs from the GUI with live log output, a parsed progress
 line, and a working Stop button; failures surface clearly.
 
-### Task G4.1 — `runner.py` command builder + process control (pure-ish)
-`type:feature` · `layer:core_unit` · `effort:L`
+### Task G4.1 — `runner.py` command builder + process control (pure-ish) ✅
+`type:feature` · `layer:webapp` · `effort:L`
 **What.** `build_command(action, options) -> list[str]` mapping GUI actions to
 `[python, "-u", "-m", <module>, <flags...>]` (Train-full, Train-incremental, Forecast, Optimize,
 Report, Single-series). `start_job(cmd, log_path)` → `Popen` teeing stdout to `Output/Logs/gui_*.log`;
@@ -169,7 +169,7 @@ so it is unit-testable and the UI stays thin.
 - [ ] `build_command` argv is asserted for full-train, incremental, and forecast (exact match).
 - [ ] `parse_progress` and `tail` pass on sample logs; a dummy job starts, streams, and stops.
 
-### Task G4.2 — Live log panel + Stop + progress
+### Task G4.2 — Live log panel + Stop + progress ✅
 `type:feature` · `layer:ui` · `effort:M`
 **What.** A reusable component: spinner + progress bar (from `parse_progress`) + scrolling last-N log
 lines + a Stop button, auto-refreshing (~1–2s) while a job runs; on exit, a success/fail banner.
@@ -294,6 +294,19 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Epic G4 complete (G4.1 + G4.2 ✅).** Added `dynamix.webapp.runner` — the pure,
+  Streamlit-free subprocess engine: `build_command(action, options)` maps each GUI action to the
+  exact `python -u -m <module> <flags>` argv (train_full / train_incremental / forecast / optimize /
+  report / single_series), `start_job` tees stdout+stderr to a run-scoped log file (own session so
+  the group can be stopped), `is_running`/`returncode`/`stop_job` (SIGTERM the process group),
+  `tail`, `parse_progress` (last "X/Y", preferring "progress" lines), and `job_view` (pure state
+  machine → running|stopped|done|failed + progress + tail). Red→Green `tests/webapp/test_runner.py`
+  (14 tests incl. exact argv per action, a real start/stream/**stop** cycle, and job_view states).
+  Added the reusable `render_job_panel` Streamlit component (thin mapping over `job_view`: start
+  button, live progress bar + log via an `st.fragment(run_every=1.5)` auto-refresh, Stop, and a
+  success/stopped/failed banner) and wired it into the Train page's incremental button. **Live-
+  verified** via `AppTest`: start button renders; an injected finished job shows **Done** + its log;
+  a failed job shows **Failed (exit code 1)**. Suite: **143 tests, OK (skipped=5)**.
 - 2026-07-01 — **Epic G3 complete (G3.1 + G3.2 ✅).** Added `dynamix.webapp.data_io` — pure,
   Streamlit-free `validate_row` (date `%d/%m/%Y`, exactly 7 whole numbers; clear per-field errors),
   `append_draw` (validate → **atomic** temp-write + `os.replace`; creates the file with header when

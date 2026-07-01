@@ -11,12 +11,15 @@ the pages here are thin views. Later epics fill in the Data/Train/Forecast bodie
 """
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
+from typing import Callable, Dict, Optional
 
 import pandas as pd
 import streamlit as st
 
 from dynamix.webapp import data_io
+from dynamix.webapp import runner
 from dynamix.webapp import state as project_state
 
 APP_TITLE = "DynaMix Lottery Forecasting"
@@ -114,9 +117,94 @@ def page_data(status: "project_state.ProjectStatus") -> None:
             st.error(res.error)
 
 
+def _log_dir() -> Path:
+    from dynamix import constants as C
+
+    return Path(C.OUTPUT_LOGS_DIR)
+
+
+def render_job_panel(
+    *,
+    key: str,
+    start_label: str,
+    action: str,
+    options: Optional[Dict[str, object]] = None,
+    on_success: Optional[Callable[[], None]] = None,
+    confirm_text: Optional[str] = None,
+) -> None:
+    """Reusable live-job panel (G4.2): start a wrapped CLI, stream its log, show progress, Stop.
+
+    Thin view over ``runner.job_view`` (the state machine lives there, unit-tested). Auto-refreshes
+    via a Streamlit fragment while the job runs; shows a success/stopped/failed banner when it ends.
+    """
+    ss = st.session_state
+    jkey = f"job_{key}"
+
+    if jkey not in ss:
+        proceed = True
+        if confirm_text:
+            proceed = st.checkbox(confirm_text, key=f"confirm_{key}")
+        if st.button(start_label, key=f"start_{key}", type="primary", disabled=not proceed):
+            log_path = _log_dir() / f"gui_{action}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.log"
+            ss[jkey] = runner.start_job(runner.build_command(action, options or {}), log_path)
+            ss.pop(f"stopped_{key}", None)
+            st.rerun()
+        return
+
+    job = ss[jkey]
+
+    def _body(in_fragment: bool) -> None:
+        view = runner.job_view(job, stopped=bool(ss.get(f"stopped_{key}")))
+        state, prog, text = view["state"], view["progress"], view["text"]
+
+        if state == "running":
+            if prog and prog[1] > 0:
+                st.progress(min(prog[0] / prog[1], 1.0), text=f"Working… step {prog[0]}/{prog[1]}")
+            else:
+                st.progress(0.0, text="Working…")
+            if st.button("Stop", key=f"stop_{key}"):
+                runner.stop_job(job)
+                ss[f"stopped_{key}"] = True
+                st.rerun()
+        elif state == "stopped":
+            st.warning("Stopped.")
+        elif state == "done":
+            st.success("Done.")
+            if on_success:
+                on_success()
+        else:
+            st.error(f"Failed (exit code {view['returncode']}). See the log below.")
+
+        st.code(text or "(waiting for output…)", language="log")
+
+        if state != "running" and st.button("Clear output", key=f"clear_{key}"):
+            ss.pop(jkey, None)
+            ss.pop(f"stopped_{key}", None)
+            st.rerun()
+
+        if in_fragment and state != "running":
+            st.rerun()  # break out of the live fragment to a static render
+
+    if runner.is_running(job):
+        st.fragment(lambda: _body(True), run_every=1.5)()
+    else:
+        _body(False)
+
+
 def page_train(status: "project_state.ProjectStatus") -> None:
     st.header("2. Train")
-    st.write("Run a full training, or add a new draw to the notes. (Coming in G5.)")
+    st.write(
+        "Train once in a while (Step 2). After each new draw, add it to the notes (Step 5a). "
+        "A full training is slow; the incremental update is fast."
+    )
+    st.subheader("Add new draw to notes (fast)")
+    st.caption("Folds the newest draw into the training notes.")
+    render_job_panel(
+        key="train_inc",
+        start_label="Add new draw to notes",
+        action="train_incremental",
+    )
+    st.info("The **Full training (slow)** button arrives in G5.")
 
 
 def page_forecast(status: "project_state.ProjectStatus") -> None:
