@@ -27,7 +27,7 @@ builds on V1's data; V5 is last and needs an explicit go/no-go).
 
 ---
 
-# EPIC V1 — Optimize & Score page
+# EPIC V1 — Optimize & Score page  ✅
 `priority:P1` · `type:feature`
 
 **What.** A page that runs `--action optimize` and shows the honest verdict: per-optimizer
@@ -40,7 +40,7 @@ a fair random control. It surfaces the project's central honesty feature in the 
 **Definition of done.** From a StatGrid, the user runs optimize and sees the scoreboard table +
 a one-line verdict; gated with "train first" when no StatGrid exists.
 
-### Task V1.1 — Scoreboard/summary parser (pure)
+### Task V1.1 — Scoreboard/summary parser (pure) ✅
 `type:feature` · `layer:webapp` · `effort:M`
 **What.** `dynamix.webapp.optimize_results` (or extend `results.py`): `load_summary(path) ->
 SummaryView` parsing the optimizer's `summary_current.json` (the E1.4 `scoreboard` + `baseline`
@@ -55,7 +55,7 @@ an empty view on missing/partial files.
 - [ ] Sample summary parses to the correct scoreboard rows + verdict fields; bad input is safe.
 - [ ] `latest_summary()` finds the newest written summary under the optimization dir.
 
-### Task V1.2 — Optimize & Score page UI
+### Task V1.2 — Optimize & Score page UI ✅
 `type:feature` · `layer:ui` · `effort:M`
 **What.** Gated on `has_training`. A **Run optimize** button (`--action optimize --run-id latest
 --optimizer all`) via `render_job_panel`; Advanced expander (`--optimizer`, `--seed`, slice flags);
@@ -182,6 +182,23 @@ v1 (done) ─▶ V1 (optimize+score) ─▶ V4 (charts)
           ├▶ V3 (single-series)
           └▶ V5 (retire Tkinter, gated, last)
 ```
+
+## Progress log
+
+- 2026-07-01 — **Epic V1 complete (V1.1 + V1.2 ✅).** Added `dynamix.webapp.optimize_results` —
+  pure, Streamlit-free `load_summary(path) -> SummaryView` parsing the optimizer's
+  `summary_current.json` (`opt_diagnostics.write_final_summary`, under `Output/Reports/Optimization/`):
+  its `scoreboard` (keyed by optimizer → `realized_ge_H_rate`/`base_rate_ge_H`/`qany_ece`/`net_eur`/
+  `baseline_net_eur`/`edge_eur`) becomes tidy `scoreboard_rows()` with an **EDGE / no-edge** verdict,
+  plus `any_edge()` and a `latest_summary()` locator (prefers `summary_current.json`, else newest
+  `summary_*.json`). Red→Green `tests/webapp/test_optimize_results.py` (5 tests). Added the gated
+  **4. Optimize & Score** page: a **Run optimize** button (`--action optimize --run-id latest
+  --optimizer all`) via `render_job_panel`, Advanced (`--optimizer` incl. an evo opt-in heads-up,
+  `--seed`), and an on-success renderer that loads the latest summary into a scoreboard table +
+  edge banner + CSV download. **Live-verified** via `AppTest` over temp `DYNAMIX_OUTPUT_DIR`: no
+  StatGrid → gate + no button; StatGrid + summary → Run button, and an injected finished job renders
+  the scoreboard (`Optimizer … edge_eur, verdict` with EDGE/no-edge) and the "beat the random
+  control" banner. Suite: **155 tests, OK (skipped=5)**.
 
 ## Open decision
 

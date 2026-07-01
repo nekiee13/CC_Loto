@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 
 from dynamix.webapp import data_io
+from dynamix.webapp import optimize_results
 from dynamix.webapp import results as forecast_results
 from dynamix.webapp import runner
 from dynamix.webapp import state as project_state
@@ -292,11 +293,71 @@ def page_forecast(status: "project_state.ProjectStatus") -> None:
     )
 
 
+def _render_latest_scoreboard() -> None:
+    path = optimize_results.latest_summary()
+    if not path:
+        st.info("No optimize summary found yet.")
+        return
+    view = optimize_results.load_summary(path)
+    if not view.ok:
+        st.error(view.error)
+        return
+    rows = view.scoreboard_rows()
+    if not rows:
+        st.info("The summary has no scoreboard yet.")
+        return
+
+    st.subheader("Honest scoreboard (measured on EVAL)")
+    df = pd.DataFrame(rows)
+    st.dataframe(df, width="stretch", hide_index=True)
+    if view.any_edge():
+        st.success("At least one optimizer beat the random control (edge_eur > 0).")
+    else:
+        st.warning("No optimizer beat the random control on this run (edge_eur ≤ 0).")
+    st.caption(
+        "edge_eur = net_eur − baseline_net_eur. Positive means it beat a fair random control. "
+        f"Run `{view.grid_run_id or '?'}` · generated {view.generated_at or ''}."
+    )
+    st.download_button(
+        "Download scoreboard (CSV)", df.to_csv(index=False), file_name="scoreboard.csv", mime="text/csv"
+    )
+
+
+def page_optimize(status: "project_state.ProjectStatus") -> None:
+    st.header("4. Optimize & Score")
+    st.write(
+        "Check whether the strategy actually beats a fair random control — the honest verdict. "
+        "This runs on your past draws; it does not make new tickets."
+    )
+    if not status.has_training:
+        st.warning("No training yet. Do a **full training** on the Train page first (Step 2).")
+        return
+
+    with st.expander("Advanced settings"):
+        optimizer = st.selectbox(
+            "Which optimizer(s) — `--optimizer`", ["all", "greedy", "milp", "bandit", "evo"],
+            index=0, key="opt_optimizer",
+        )
+        seed = st.number_input("Random seed — `--seed`", value=123, step=1, key="opt_seed")
+    if optimizer == "evo":
+        st.info("`evo` is a real but expensive search (opt-in). It can take a while.")
+    options: Dict[str, object] = {"run_id": "latest", "optimizer": optimizer, "seed": int(seed)}
+
+    render_job_panel(
+        key="optimize",
+        start_label="Run optimize",
+        action="optimize",
+        options=options,
+        on_success=_render_latest_scoreboard,
+    )
+
+
 PAGES = {
     "Home": page_home,
     "1. Data": page_data,
     "2. Train": page_train,
     "3. Forecast": page_forecast,
+    "4. Optimize": page_optimize,
 }
 
 
