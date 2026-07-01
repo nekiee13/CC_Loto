@@ -468,6 +468,14 @@ def _run_optimize(cfg) -> None:
 
     want = sorted(list(cfg.which_optimizers()))
     print(f"[OPT] Optimizers selected: {want}", flush=True)
+    experimental = sorted(cfg.experimental_optimizers_selected())
+    if experimental:
+        print(
+            f"[OPT] WARNING: experimental/stub optimizer(s) selected: {experimental}. "
+            "These are not real optimization yet (deterministic stub) and are excluded from "
+            "`--optimizer all`; results are for development only.",
+            flush=True,
+        )
     print("[OPT] ------------------ Strategy execution begins ------------------", flush=True)
 
     t_exec = time.monotonic()

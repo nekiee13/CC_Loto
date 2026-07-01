@@ -9,6 +9,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
 
+# Optimizer registry. `ALL_OPTIMIZERS` is every selectable strategy; `EXPERIMENTAL_OPTIMIZERS`
+# are stubs/incomplete strategies that must NOT be included in the `--optimizer all` fan-out and
+# are flagged when requested explicitly (E6.1). `evo` (run_evolutionary) is a deterministic stub
+# pending a real implementation (E6.2).
+ALL_OPTIMIZERS: Set[str] = {"greedy", "milp", "bandit", "evo"}
+EXPERIMENTAL_OPTIMIZERS: Set[str] = {"evo"}
+
+
 def _default_ts_list() -> List[str]:
     return ["TS_1", "TS_2", "TS_3", "TS_4", "TS_5", "TS_6", "TS_7"]
 
@@ -103,7 +111,7 @@ class OptConfig:
     seed: int = 123
 
     # Optimizers to run (only used when action=optimize)
-    optimizer: str = "all"  # all|greedy|milp|bandit|evo
+    optimizer: str = "all"  # all|greedy|milp|bandit|evo  (evo=experimental stub, excluded from `all`)
 
     # MILP
     milp_max_pool: int = 500
@@ -181,8 +189,14 @@ class OptConfig:
     def which_optimizers(self) -> Set[str]:
         o = str(self.optimizer).lower().strip()
         if o == "all":
-            return {"greedy", "milp", "bandit", "evo"}
+            # `all` fans out to production optimizers only; experimental stubs (e.g. `evo`)
+            # are excluded and must be requested explicitly (E6.1 honesty gate).
+            return set(ALL_OPTIMIZERS) - EXPERIMENTAL_OPTIMIZERS
         return {o}
+
+    def experimental_optimizers_selected(self) -> Set[str]:
+        """Experimental optimizers in the current selection (surface a warning before running)."""
+        return self.which_optimizers() & EXPERIMENTAL_OPTIMIZERS
 
 
 def parse_args() -> argparse.Namespace:
@@ -208,7 +222,12 @@ def parse_args() -> argparse.Namespace:
     )
 
     # optimize strategy selection (ignored for --action forecast; kept for CLI consistency)
-    p.add_argument("--optimizer", type=str, default="all", choices=["all", "greedy", "milp", "bandit", "evo"])
+    p.add_argument(
+        "--optimizer", type=str, default="all", choices=["all", "greedy", "milp", "bandit", "evo"],
+        help="Strategy to run. 'all' runs production optimizers (greedy, milp, bandit). "
+             "'evo' is EXPERIMENTAL (deterministic stub) and is excluded from 'all'; "
+             "select it explicitly to run it.",
+    )
 
     # resume / run folder control
     p.add_argument("--resume", type=str, default="none", help="none|latest|<path-to-state.pkl.gz>|<state-dir>")

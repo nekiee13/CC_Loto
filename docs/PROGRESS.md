@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 epics complete; E3.1/E3.2 done)_
+_Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 complete; E3.1/E3.2 + E6.1 done)_
 
 ---
 
@@ -20,10 +20,10 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 epics complete; E3.1/E3.2 done
 | E3 — CI + import smoke tests | P0 | ✅ Done | 2 / 2 | green core + non-blocking optional job |
 | E4 — Decompose `stat.py` | P1 | ✅ Done | 2 / 2 | `dynamix.candidate_grid` extracted; golden-locked; stat re-exports |
 | E5 — Test analytical core + coverage | P1 | ✅ Done | 3 / 3 | engine math + scoring under known-answer tests; coverage in CI |
-| E6 — Resolve evolutionary stub | P2 | ⬜ Todo | 0 / 2 | E6.1 do regardless |
+| E6 — Resolve evolutionary stub | P2 | 🟡 Partial | 1 / 2 | E6.1 done; E6.2 optional |
 | E7 — De-dupe rounding storage | P2 | ✅ Done | 1 / 1 | Behind flag |
 | E8 — Cleanup & polish | P3 | ⬜ Todo | 0 / 4 | Anytime |
-| **Total** | | **🟡** | **15 / 21** | |
+| **Total** | | **🟡** | **16 / 21** | |
 
 **Suggested order:** E3 → E2 → E1 → E5 → E4 → E7, with E6 and E8 branching off.
 
@@ -68,7 +68,7 @@ _Last updated: 2026-07-01 (E1 + E2 + E4 + E5 + E7 epics complete; E3.1/E3.2 done
 ### E6 — Resolve evolutionary stub `P2`
 | Task | Status | Owner | PR / Commit | Notes |
 |------|--------|-------|-------------|-------|
-| E6.1 Decision gate + honesty fix | ⬜ | — | — | do regardless |
+| E6.1 Decision gate + honesty fix | ✅ | — | (uncommitted) | `evo` gated experimental; excluded from `all`; warns on explicit select |
 | E6.2 Implement evolutionary search (optional) | ⬜ | — | — | depends on E5.2 |
 
 ### E7 — De-dupe rounding storage `P2`
@@ -95,6 +95,17 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-01 — **E6.1 done → honesty gate for the evolutionary stub (E6 now 1/2).** `run_evolutionary`
+  is a deterministic stub but was silently included in `--optimizer all`. Added an optimizer registry
+  to `opt.opt_config`: `ALL_OPTIMIZERS` + `EXPERIMENTAL_OPTIMIZERS = {"evo"}`. `which_optimizers()`
+  now expands `all` to production optimizers only (`{greedy, milp, bandit}` — evo excluded); evo stays
+  explicitly selectable (opt-in) via `--optimizer evo`. New `OptConfig.experimental_optimizers_selected()`
+  surfaces experimental picks; the orchestrator prints a clear `WARNING: experimental/stub optimizer(s)
+  selected` before running, and the `--optimizer` help/`optimizer` field now label evo experimental.
+  Red test `tests/contract/test_optimizer_choices.py::test_evo_marked_experimental` (registry membership,
+  `all` excludes evo, explicit evo selectable + flagged, non-experimental picks flag nothing) — no
+  torch/darts needed. E6.2 (real evolutionary search) remains optional. Suite: **101 tests, OK (skipped=5)**.
+  **16 / 21**.
 - 2026-07-01 — **E7.1 done → Epic E7 complete (1/1).** Distinct-value candidate-grid encoding
   behind the `--statgrid-dedupe` exporter flag. The 7 rounding modes only differ at `.5`
   boundaries, so a `(dataset_index, ts, model)` cell usually yields ≪7 distinct `rounded`
