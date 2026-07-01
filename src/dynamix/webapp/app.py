@@ -163,9 +163,14 @@ def render_job_panel(
 
         if state == "running":
             if prog and prog[1] > 0:
-                st.progress(min(prog[0] / prog[1], 1.0), text=f"Working… step {prog[0]}/{prog[1]}")
+                frac = min(prog[0] / prog[1], 1.0)
+                label = f"{int(frac * 100)}%  ·  step {prog[0]}/{prog[1]}"
+                eta = runner.parse_eta(text)
+                if eta:
+                    label += f"  ·  eta {eta}"
+                st.progress(frac, text=label)
             else:
-                st.progress(0.0, text="Working…")
+                st.progress(0.0, text="Working… (starting up)")
             if st.button("Stop", key=f"stop_{key}"):
                 runner.stop_job(job)
                 ss[f"stopped_{key}"] = True

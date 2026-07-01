@@ -72,6 +72,27 @@ class TestProgressAndTail(unittest.TestCase):
     def test_parse_progress_none_when_absent(self) -> None:
         self.assertIsNone(runner.parse_progress("no numbers here\njust text\n"))
 
+    def test_parse_progress_tracks_a_growing_log(self) -> None:
+        # As the CLI logs more "Step X/Y" lines, the parsed fraction increases (bar advances).
+        early = "[STAT] Step 1/512 elapsed=1s\n"
+        later = early + "[STAT] Step 128/512 elapsed=30s\n[STAT] Step 256/512 elapsed=60s\n"
+        e = runner.parse_progress(early)
+        l = runner.parse_progress(later)
+        self.assertEqual(e, (1, 512))
+        self.assertEqual(l, (256, 512))
+        self.assertLess(e[0] / e[1], l[0] / l[1])
+
+    def test_parse_progress_reads_optimize_and_step_formats(self) -> None:
+        self.assertEqual(runner.parse_progress("[OPT][greedy] progress: 40/120 (33.3%) | eta=0:12"), (40, 120))
+        self.assertEqual(runner.parse_progress("[STAT] Step 7/512 | 1.4%"), (7, 512))
+
+    def test_parse_eta(self) -> None:
+        self.assertEqual(runner.parse_eta("progress: 40/120 | elapsed=0:30 | eta=0:12"), "0:12")
+        self.assertEqual(
+            runner.parse_eta("eta=1:02:03\nlater eta=0:00:45"), "0:00:45"
+        )  # last one wins
+        self.assertIsNone(runner.parse_eta("no eta here"))
+
     def test_tail_returns_last_n_lines(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "log.txt"

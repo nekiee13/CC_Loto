@@ -202,6 +202,19 @@ def job_view(job: Job, *, stopped: bool = False, n_lines: int = 200) -> Dict[str
     return {"state": state, "progress": prog, "returncode": returncode(job), "text": text}
 
 
+_ETA = re.compile(r"eta\s*=\s*([0-9:]+)", re.IGNORECASE)
+
+
+def parse_eta(text: str) -> Optional[str]:
+    """Extract the last ``eta=HH:MM:SS`` (or ``M:SS``) from CLI progress lines, or ``None``."""
+    if not text:
+        return None
+    last: Optional[str] = None
+    for m in _ETA.finditer(text):
+        last = m.group(1)
+    return last
+
+
 def tail(log_path: Path, n: int) -> List[str]:
     """Return the last ``n`` lines of ``log_path`` (empty list if missing/unreadable)."""
     log_path = Path(log_path)

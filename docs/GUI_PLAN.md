@@ -297,6 +297,14 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Enhancement: live progress bar tied to the calculations (refines G4.2).** The three
+  long operations already log parseable progress — full training `[STAT] Step {n}/{total}`, the
+  export rebuild `Full export rebuild progress: {n}/{total}`, and optimize
+  `[OPT][stage] progress: {n}/{total} (…%) … eta=…`. Enriched the live panel so the bar shows
+  **percentage · step n/total · eta** (added `runner.parse_eta`; the bar value is `n/total`). The
+  fragment re-reads the log tail every 1.5s so the bar advances in real time. Added runner tests
+  (growing-log tracking, optimize/step formats, eta parsing) and **verified via `AppTest`** that as a
+  job's log grows the progress element climbs **10% → 80%**. Suite: **166 tests, OK (skipped=5)**.
 - 2026-07-01 — **Epic G7 complete (G7.1 + G7.2 ✅) → v1 GUI plan DONE (all 7 epics).** Added a
   beginner-friendly **§12 "Prefer clicking? Use the GUI"** to `User_manual.md` (install
   `pip install -e .[gui]`, launch `dynamix-gui`, the status lights, and the Data/Train/Forecast
