@@ -181,7 +181,7 @@ lines + a Stop button, auto-refreshing (~1–2s) while a job runs; on exit, a su
 
 ---
 
-# EPIC G5 — Train page
+# EPIC G5 — Train page  ✅
 `priority:P0` · `type:feature`
 
 **What.** Buttons for full training and incremental update, wired through the runner. **Why.** Step 2
@@ -190,7 +190,7 @@ and Step 5a of the manual, click-only.
 **Definition of done.** A user can run a full training and an incremental update from the GUI and
 watch progress to completion.
 
-### Task G5.1 — Train page UI
+### Task G5.1 — Train page UI ✅
 `type:feature` · `layer:ui` · `effort:M`
 **What.** **Full training (slow)** button behind a confirm dialog (explains it takes a while), and
 **Add new draw to notes (fast)** button (`--resume latest --statgrid-export incremental`). Advanced
@@ -294,6 +294,15 @@ parallel once status exists).
 
 ## Progress log
 
+- 2026-07-01 — **Epic G5 complete (G5.1 ✅).** Finished the Train page (reusing `render_job_panel`):
+  a **Full training (slow)** button gated behind a confirm checkbox, a fast **Add new draw to notes**
+  (incremental) button, and an Advanced expander exposing `--statgrid-dedupe` and `--resume` with
+  CLI-identical defaults. **Live-verified** via `AppTest`: both buttons render; the full-training
+  start button is disabled until the confirm box is ticked (True→False on the `.disabled` flag); and
+  ticking the advanced dedupe box makes the started job's argv exactly
+  `… -m dynamix.stat --statgrid-export full --statgrid-dedupe` (checked with a capturing monkeypatch
+  so no real training ran). UI-only; argv correctness is covered by the G4 runner tests. Suite:
+  **143 tests, OK (skipped=5)**.
 - 2026-07-01 — **Epic G4 complete (G4.1 + G4.2 ✅).** Added `dynamix.webapp.runner` — the pure,
   Streamlit-free subprocess engine: `build_command(action, options)` maps each GUI action to the
   exact `python -u -m <module> <flags>` argv (train_full / train_incremental / forecast / optimize /

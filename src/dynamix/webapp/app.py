@@ -197,14 +197,38 @@ def page_train(status: "project_state.ProjectStatus") -> None:
         "Train once in a while (Step 2). After each new draw, add it to the notes (Step 5a). "
         "A full training is slow; the incremental update is fast."
     )
+
+    with st.expander("Advanced settings"):
+        dedupe = st.checkbox(
+            "Store notes in the smaller de-duped form (`--statgrid-dedupe`)", key="train_dedupe"
+        )
+        resume = st.text_input(
+            "Resume from (blank = default) — `--resume`", key="train_resume",
+            placeholder="latest, a step index, or a path",
+        )
+    options: Dict[str, object] = {"dedupe": bool(dedupe)}
+    if resume.strip():
+        options["resume"] = resume.strip()
+
+    st.subheader("Full training (slow)")
+    st.caption("Rebuilds the notes from every draw. Do this rarely — e.g. once every six months.")
+    render_job_panel(
+        key="train_full",
+        start_label="Run full training",
+        action="train_full",
+        options=options,
+        confirm_text="I understand this reads every draw and can take a long time.",
+    )
+
+    st.divider()
     st.subheader("Add new draw to notes (fast)")
-    st.caption("Folds the newest draw into the training notes.")
+    st.caption("Folds the newest draw into the training notes (Step 5a).")
     render_job_panel(
         key="train_inc",
         start_label="Add new draw to notes",
         action="train_incremental",
+        options=options,
     )
-    st.info("The **Full training (slow)** button arrives in G5.")
 
 
 def page_forecast(status: "project_state.ProjectStatus") -> None:
