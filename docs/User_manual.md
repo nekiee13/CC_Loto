@@ -353,6 +353,13 @@ The smart model parts are not installed. The app still runs, but it has nothing
 to guess with. Install the model parts, then try again. Ask your setup helper,
 or see the install guide in the `docs` folder.
 
+**A forecast number looks wrong — a `0`, a decimal, or too big.**
+Forecast numbers are shown as whole numbers inside the valid range: `1`–`50`
+for `TS_1` to `TS_5`, and `1`–`12` for `TS_6` and `TS_7`. The app rounds each
+guess and keeps it in range, so you should never see a `0`, a decimal like
+`7.83`, or a number above the limit. If an older run showed one of those,
+update the app and run again.
+
 **"No StatGrid runs found under: Output/Reports/Exports/StatGrid".**
 You asked for a forecast before training. Do a full training first (Step 2).
 Then forecast again.
