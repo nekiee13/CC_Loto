@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain, progress-bar & Tkinter-GUI fixes)_
+_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain, progress-bar & Tkinter-GUI fixes; conda install docs)_
 
 ---
 
@@ -95,6 +95,14 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-03 — **Docs: conda (path-based env, CUDA GPU) install alternative** (`0343a65`). Added
+  `installation_guide.md` §2b — a `conda create -p <path>` prefix-env route (environment lives in a
+  chosen folder, easy to locate/delete) on Python 3.11 with a CUDA build of PyTorch. Expands a
+  user 5-step draft with correct commands: the required `pip install -e . --no-deps` the draft
+  omitted (so `dynamix`/`opt` import and console scripts exist), installing the CUDA `torch` from
+  the official index *before* `darts` (which otherwise drags in a CPU-only wheel), GPU verification
+  (`torch.cuda.is_available()`, `device.describe_device()` → `GPU (CUDA)`), and the `DARTS_FORCE_GPU`
+  guard. Adds a §2 pointer and a CUDA troubleshooting row. Docs-only; no code change.
 - 2026-07-03 — **Live-testing fix: Tkinter GUI value-clamp + Darts progress** (`e388f2f`). The
   Tkinter GUI (`gui.py`) is a separate display path from the CLI/webapp and still showed raw
   rounded model values, so it could render an impossible ball number (a `0` or out-of-range), and
