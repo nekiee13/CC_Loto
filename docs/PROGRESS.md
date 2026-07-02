@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain & progress-bar fixes)_
+_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain, progress-bar & Tkinter-GUI fixes)_
 
 ---
 
@@ -95,6 +95,19 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-03 — **Live-testing fix: Tkinter GUI value-clamp + Darts progress** (`e388f2f`). The
+  Tkinter GUI (`gui.py`) is a separate display path from the CLI/webapp and still showed raw
+  rounded model values, so it could render an impossible ball number (a `0` or out-of-range), and
+  `_round_half_up` turned NaN/errors into a misleading `0`. Added `_round_clamp_ball(value, ts)`:
+  round half-up, clamp into `C.TS_VALUE_DOMAINS`, and return `None` for missing/non-finite so the
+  table shows `-` instead of `0`; wired into the DynaMix, PCE, and Darts rows. This closes the
+  implausible-value bug across **all** display paths (CLI `format_ball_val`, Stage-3 tickets, webapp,
+  Tkinter GUI). Also fixed the GUI progress bar freezing during Darts (`darts_core` has no progress
+  hook): emit coarse 0%/100% `progress_model` events around the Darts call so the overall bar
+  advances between models (consistent with DynaMix's coarse callback); no `darts_core` change.
+  Tests `tests/core_unit/test_gui_forecast_display.py`, tkinter-guarded to skip on headless boxes
+  (matching the existing `test_gui_imports_or_skips_without_display`). Suite: **185 tests, OK
+  (skipped=9 here without tkinter/model runtime)**. Post-plan maintenance.
 - 2026-07-03 — **Live-testing fix: webapp live progress bar now tracks train/optimize/forecast**
   (`1aedbc5`). The Streamlit live-job panel scrapes an `X/Y` pair from the CLI log (preferring
   lines with the word "progress") plus an `eta=` token, then renders `st.progress`. Three gaps made
