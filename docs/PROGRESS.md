@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain fixes)_
+_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain & progress-bar fixes)_
 
 ---
 
@@ -95,6 +95,21 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-03 — **Live-testing fix: webapp live progress bar now tracks train/optimize/forecast**
+  (`1aedbc5`). The Streamlit live-job panel scrapes an `X/Y` pair from the CLI log (preferring
+  lines with the word "progress") plus an `eta=` token, then renders `st.progress`. Three gaps made
+  it unreliable. **(1) Training** logged `[STAT] Step n/total … | ETR: Xs` — no "progress" keyword
+  and an `ETR:` value `parse_eta` can't read — so it showed no ETA and relied on the weak fallback;
+  worse, a stale full-rebuild `progress: 512/512 (100%)` line could pin the bar at 100% during the
+  real backtest. Fixed by emitting the canonical `[STAT] progress: n/total (…%) | elapsed=… |
+  eta=H:MM:SS` (added `_fmt_hms` to `dynamix.stat`); since the parser prefers the *latest* progress
+  line, the live backtest line now wins. **(2) `parse_progress`** could be hijacked by a date/path
+  `d/d/d` pair (e.g. `30/05/2017`) — hardened the `_NUM_PAIR` regex with lookarounds to skip those.
+  **(3) Forecast** emitted no progress at all — added six coarse `[OPT][forecast] progress: k/6
+  (stage)` checkpoints across `_run_forecast` (grid resolved → loaded → engine fit → candidate grid
+  → tickets → report). Optimize already worked (`opt_strategies` prints `[OPT][stage] progress: X/Y
+  … eta=…`). Tests `tests/webapp/test_progress_parsing.py` (eta parse, latest-supersedes-stale,
+  date pairs ignored, forecast stages). Suite: **181 tests, OK (skipped=5)**. Post-plan maintenance.
 - 2026-07-03 — **Live-testing fix: forecast values constrained to each series' valid domain.**
   Three commits fixing implausible forecast output surfaced during live testing — a next-step
   ticket contained a `0`, below every series minimum. Root cause: candidate ball values were
