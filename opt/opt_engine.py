@@ -25,6 +25,39 @@ from sklearn.calibration import CalibratedClassifierCV
 Ticket = Tuple[int, ...]  # general (TS count fixed by cfg.ts_list)
 
 
+def _clamp_candidate_value(cfg: Any, ts: str, value: int) -> int:
+    """Clamp a candidate ball value into the series' valid domain.
+
+    Prefers ``cfg.clamp_value`` (the real :class:`OptConfig`); falls back to a
+    ``ts_value_domains`` mapping if present. When the config carries no domain
+    information (e.g. a lightweight test double), the value is returned
+    unchanged so legacy behaviour is preserved.
+    """
+    fn = getattr(cfg, "clamp_value", None)
+    if callable(fn):
+        return int(fn(ts, value))
+    domains = getattr(cfg, "ts_value_domains", None)
+    if domains:
+        bounds = domains.get(str(ts))
+        if bounds:
+            lo, hi = int(bounds[0]), int(bounds[1])
+            return max(lo, min(hi, int(value)))
+    return int(value)
+
+
+def _series_min(cfg: Any, ts: str) -> int:
+    """Return the series' minimum valid value, or 0 when no domain is known."""
+    fn = getattr(cfg, "domain_for", None)
+    if callable(fn):
+        return int(fn(ts)[0])
+    domains = getattr(cfg, "ts_value_domains", None)
+    if domains:
+        bounds = domains.get(str(ts))
+        if bounds:
+            return int(bounds[0])
+    return 0
+
+
 @dataclass(frozen=True)
 class CandidateKey:
     ts: str
@@ -162,7 +195,10 @@ class ConditionalProbEngine:
         Historical fallback candidate source:
           - chooses the most frequent TRAIN truth value for this TS if available
           - otherwise chooses most frequent global TRAIN truth value
-          - otherwise 0
+          - otherwise the series' minimum valid value
+
+        The result is always clamped into the series' valid domain so the
+        fallback can never inject an out-of-range ball number (e.g. 0).
         """
         # TS-specific most frequent
         best_v: Optional[int] = None
@@ -174,7 +210,7 @@ class ConditionalProbEngine:
                 best_c = int(c)
                 best_v = int(v)
         if best_v is not None:
-            return int(best_v)
+            return _clamp_candidate_value(self.cfg, ts, int(best_v))
 
         # Global most frequent
         best_v2: Optional[int] = None
@@ -184,9 +220,10 @@ class ConditionalProbEngine:
                 best_c2 = int(c)
                 best_v2 = int(v)
         if best_v2 is not None:
-            return int(best_v2)
+            return _clamp_candidate_value(self.cfg, ts, int(best_v2))
 
-        return 0
+        # No truth data at all: fall back to the series' minimum valid value.
+        return _series_min(self.cfg, ts)
 
     def build_shortlists_for_step(self, step_df: pd.DataFrame, shortlist_m: int) -> Dict[str, List[TSShortlistItem]]:
         """
@@ -262,10 +299,14 @@ class ConditionalProbEngine:
             # Rank by p_hit desc, abs_err asc
             sub = sub.sort_values(by=["p_hit", "abs_err"], ascending=[False, True], kind="stable")
 
-            # Keep unique values (best per value)
+            # Keep unique values (best per value). Candidate values are clamped
+            # into the series' valid domain so a rounded model forecast that lands
+            # out of range (e.g. an undershoot rounding to 0) can never reach a
+            # ticket. Dedup is keyed on the clamped value, so values that clamp to
+            # the same bound collapse to the best-ranked (highest p_hit) candidate.
             uniq: Dict[int, TSShortlistItem] = {}
             for _, r in sub.iterrows():
-                v = int(r["rounded"])
+                v = _clamp_candidate_value(self.cfg, ts, int(r["rounded"]))
                 if v in uniq:
                     continue
                 item = TSShortlistItem(

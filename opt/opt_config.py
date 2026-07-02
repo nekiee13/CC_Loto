@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 # Optimizer registry. `ALL_OPTIMIZERS` is every selectable strategy; `NON_DEFAULT_OPTIMIZERS`
@@ -24,6 +24,25 @@ def _default_ts_list() -> List[str]:
 
 def _default_payouts() -> Dict[int, float]:
     return {0: 0.0, 1: 0.0, 2: 0.0, 3: 10.0, 4: 50.0, 5: 2000.0, 6: 50000.0, 7: 1000000.0}
+
+
+def _default_ts_value_domains() -> Dict[str, Tuple[int, int]]:
+    """Inclusive valid integer domain (ball-number range) per positional series.
+
+    Candidate values produced by the forecast models are clamped into these
+    bounds so a ticket can never contain an out-of-range number (e.g. a 0, which
+    is below every series minimum). TS_1..TS_5 are main balls (1..50); TS_6/TS_7
+    are the bonus balls (1..12).
+    """
+    return {
+        "TS_1": (1, 50),
+        "TS_2": (1, 50),
+        "TS_3": (1, 50),
+        "TS_4": (1, 50),
+        "TS_5": (1, 50),
+        "TS_6": (1, 12),
+        "TS_7": (1, 12),
+    }
 
 
 def _default_bandit_arms() -> List[Dict[str, Any]]:
@@ -73,6 +92,8 @@ class OptConfig:
 
     # Lottery & TS
     ts_list: List[str] = field(default_factory=_default_ts_list)
+    # Inclusive valid integer domain per series; forecast candidates are clamped to it.
+    ts_value_domains: Dict[str, Tuple[int, int]] = field(default_factory=_default_ts_value_domains)
 
     # Economics
     ticket_cost_eur: float = 2.0
@@ -136,6 +157,20 @@ class OptConfig:
     @property
     def n_positions(self) -> int:
         return int(len(self.ts_list))
+
+    def domain_for(self, ts: str) -> Tuple[int, int]:
+        """Return the inclusive (lo, hi) valid value range for a series.
+
+        Falls back to (1, 50) for an unknown series so callers always get a
+        usable bound rather than a KeyError.
+        """
+        lo, hi = self.ts_value_domains.get(str(ts), (1, 50))
+        return (int(lo), int(hi))
+
+    def clamp_value(self, ts: str, value: int) -> int:
+        """Clamp a candidate ball value into the series' valid domain."""
+        lo, hi = self.domain_for(ts)
+        return max(lo, min(hi, int(value)))
 
     def with_grid_run_id(self, run_id: str) -> "OptConfig":
         return replace(self, grid_run_id=str(run_id))
