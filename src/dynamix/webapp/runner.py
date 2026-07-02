@@ -158,14 +158,20 @@ def stop_job(job: Job) -> None:
         pass
 
 
-_NUM_PAIR = re.compile(r"(\d+)\s*/\s*(\d+)")
+# Match an ``X/Y`` pair but not one that is part of a ``d/d/d`` run such as a date
+# (``30/05/2017``) or a path segment — the lookbehind rejects a leading digit/slash and the
+# lookahead rejects a trailing ``/digit``. This keeps a stray date in the log from hijacking the
+# fallback below.
+_NUM_PAIR = re.compile(r"(?<![\d/])(\d+)\s*/\s*(\d+)(?!\d)(?!\s*/\s*\d)")
 
 
 def parse_progress(text: str) -> Optional[Tuple[int, int]]:
     """Extract ``(current, total)`` progress from CLI log text.
 
-    Prefers the last line that mentions "progress"; otherwise the last ``X/Y`` seen. Returns
-    ``None`` if no numeric pair is present.
+    Prefers the **last** line that mentions "progress" (every long-running stage emits a canonical
+    ``… progress: X/Y …`` line, so the newest one reflects the current stage). Falls back to the
+    last plain ``X/Y`` seen. Date-like ``d/d/d`` pairs are ignored. Returns ``None`` if no numeric
+    pair is present.
     """
     if not text:
         return None

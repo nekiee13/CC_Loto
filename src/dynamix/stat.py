@@ -179,6 +179,17 @@ def _setup_stat_logging(log_dir: Path) -> Path:
 log = logging.getLogger("stat")
 
 
+def _fmt_hms(seconds: float) -> str:
+    """Format seconds as ``H:MM:SS`` (or ``M:SS``) — a token the GUI's ``eta=`` parser reads."""
+    s = max(0.0, float(seconds))
+    hh = int(s // 3600)
+    mm = int((s % 3600) // 60)
+    ss = int(s % 60)
+    if hh > 0:
+        return f"{hh:d}:{mm:02d}:{ss:02d}"
+    return f"{mm:d}:{ss:02d}"
+
+
 # Mode helpers (`_is_event_mode`, `_format_step_label`) and the rounding primitives
 # (`RoundingMode`, `ROUNDING_MODE_LABELS`, `rounding_mode_id`, `apply_round`) now live in
 # dynamix.candidate_grid and are re-imported at the top of this module (E4).
@@ -1185,9 +1196,9 @@ def run_statistics(resume_arg: Optional[str], export_mode: str, dedupe: bool = F
                     avg_time = elapsed_total / max(step_num, 1)
                     etr = avg_time * (total_steps - step_num)
                     log.info(
-                        f"[STAT] Step {step_num}/{total_steps} "
+                        f"[STAT] progress: {step_num}/{total_steps} "
                         f"(dataset index={i}, {pct:5.1f}%) | "
-                        f"Elapsed: {elapsed_total:7.1f}s | ETR: {etr:7.1f}s"
+                        f"elapsed={_fmt_hms(elapsed_total)} | eta={_fmt_hms(etr)}"
                     )
 
                 history_df = _slice_history(ts_df, end_idx=i, window_rounds=effective_window)

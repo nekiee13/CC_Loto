@@ -583,6 +583,7 @@ def _run_forecast(cfg) -> None:
     t1 = time.monotonic()
     run_id, cfg = _resolve_latest_grid_run_id(cfg)
     log.info(f"[OPT] Grid run id resolved: {run_id} (elapsed={_fmt_hms(time.monotonic() - t1)})")
+    log.info(f"[OPT][forecast] progress: 1/6 (grid resolved) | elapsed={_fmt_hms(time.monotonic() - t0)}")
 
     # Load grid (needed to fit conditional model and compute truth history)
     t_load = time.monotonic()
@@ -591,6 +592,7 @@ def _run_forecast(cfg) -> None:
     log.info(
         f"[OPT] Grid loaded: rows={len(grid):,d} cols={len(grid.columns):,d} (elapsed={_fmt_hms(time.monotonic() - t_load)})"
     )
+    log.info(f"[OPT][forecast] progress: 2/6 (grid loaded) | elapsed={_fmt_hms(time.monotonic() - t0)}")
 
     # Steps
     steps_all = sorted(pd.unique(grid["dataset_index"]).tolist())
@@ -639,6 +641,7 @@ def _run_forecast(cfg) -> None:
 
     # Fit engine on TRAIN
     engine, _truth_tables = _fit_engine_from_grid(cfg=cfg, run_id=run_id, grid=grid, train_steps=[int(x) for x in train_steps])
+    log.info(f"[OPT][forecast] progress: 3/6 (engine fit) | elapsed={_fmt_hms(time.monotonic() - t0)}")
 
     # Build next-step candidate grid (Option B) from current DATA.csv
     log.info("[OPT][forecast] Building next-step candidate grid from DATA.csv (Option B)...")
@@ -648,12 +651,14 @@ def _run_forecast(cfg) -> None:
         f"[OPT][forecast] Candidate grid built for dataset_index={forecast_dataset_index} (n_obs={n_obs}) "
         f"rows={len(step_df):,d} (elapsed={_fmt_hms(time.monotonic() - t_cg)})"
     )
+    log.info(f"[OPT][forecast] progress: 4/6 (candidate grid built) | elapsed={_fmt_hms(time.monotonic() - t0)}")
 
     # Generate tickets
     log.info("[OPT][forecast] Selecting tickets...")
     t_sel = time.monotonic()
     report = _forecast_tickets(cfg=cfg, engine=engine, step_df=step_df, forecast_dataset_index=forecast_dataset_index)
     log.info(f"[OPT][forecast] Ticket selection done (elapsed={_fmt_hms(time.monotonic() - t_sel)})")
+    log.info(f"[OPT][forecast] progress: 5/6 (tickets selected) | elapsed={_fmt_hms(time.monotonic() - t0)}")
 
     # Attach provenance
     report["grid_run_id"] = str(run_id)
@@ -665,6 +670,7 @@ def _run_forecast(cfg) -> None:
 
     # Persist report under state dir
     out_path = _write_forecast_report(cfg=cfg, opt_run_id=opt_run_id, report=report)
+    log.info(f"[OPT][forecast] progress: 6/6 (report written) | elapsed={_fmt_hms(time.monotonic() - t0)}")
 
     # Also checkpoint state with a note
     state.setdefault("forecast", {})
