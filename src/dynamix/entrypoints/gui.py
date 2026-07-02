@@ -140,6 +140,29 @@ def _round_half_up(value: float) -> int:
         return 0
 
 
+def _round_clamp_ball(value: Any, ts: str) -> Optional[int]:
+    """Round to the nearest integer and clamp into the series' valid domain.
+
+    Returns ``None`` for missing / non-finite values so the forecast table renders a
+    ``-`` for them instead of a misleading ``0``. Mirrors the CLI's ``format_ball_val``
+    and keeps the GUI from ever showing an impossible ball number.
+    """
+    try:
+        if value is None:
+            return None
+        f = float(value)
+        if np.isnan(f) or np.isinf(f):
+            return None
+    except Exception:
+        return None
+    n = _round_half_up(f)
+    bounds = getattr(C, "TS_VALUE_DOMAINS", {}).get(str(ts))
+    if bounds:
+        lo, hi = int(bounds[0]), int(bounds[1])
+        n = max(lo, min(hi, n))
+    return n
+
+
 def _format_markdown_table(headers: List[str], rows: List[List[Any]]) -> str:
     """Create a Markdown table string without external dependencies."""
     str_rows: List[List[str]] = [[str(x) for x in r] for r in rows]
@@ -703,7 +726,9 @@ class DynaMixLotteryApp:
                             forecast_df = result.get("forecast_df")
                             if isinstance(forecast_df, pd.DataFrame) and not forecast_df.empty:
                                 vals, idx_str = _extract_first_step_values(forecast_df, ts_cols)
-                                table_predictions[model_label] = {k: _round_half_up(v) for k, v in vals.items()}
+                                table_predictions[model_label] = {
+                                    k: n for k, v in vals.items() if (n := _round_clamp_ball(v, k)) is not None
+                                }
                                 if idx_str:
                                     model_first_dates[model_label] = idx_str
 
@@ -753,9 +778,10 @@ class DynaMixLotteryApp:
                         except Exception:
                             pred_val = None
 
-                        if pred_val is not None:
+                        n = _round_clamp_ball(pred_val, target_series)
+                        if n is not None:
                             table_predictions.setdefault(model_label, {})
-                            table_predictions[model_label][target_series] = _round_half_up(pred_val)
+                            table_predictions[model_label][target_series] = n
 
                         # Optional export (only if plotting module is available)
                         if HAS_PLOTTING and Plotting is not None and bool(getattr(C, "EXPORT_ENABLED", True)):
@@ -802,6 +828,9 @@ class DynaMixLotteryApp:
                     self.gui_queue.put(("log", "darts_core not available or missing libs. Skipping Darts forecast.\n"))
                 else:
                     try:
+                        # Darts has no fine-grained progress hook; emit coarse 0%/100%
+                        # per model so the overall bar still advances between models.
+                        self.gui_queue.put(("progress_model", model_label, 0, fh, model_index, total_models))
                         result = DartCore.run_darts_forecast(  # type: ignore[attr-defined]
                             ts_df=ts_df,
                             target_col=target_series,
@@ -813,7 +842,9 @@ class DynaMixLotteryApp:
                             forecast_df = result.get("forecast_df")
                             if isinstance(forecast_df, pd.DataFrame) and not forecast_df.empty:
                                 vals, idx_str = _extract_first_step_values(forecast_df, ts_cols)
-                                table_predictions[model_label] = {k: _round_half_up(v) for k, v in vals.items()}
+                                table_predictions[model_label] = {
+                                    k: n for k, v in vals.items() if (n := _round_clamp_ball(v, k)) is not None
+                                }
                                 if idx_str:
                                     model_first_dates[model_label] = idx_str
 
@@ -827,6 +858,7 @@ class DynaMixLotteryApp:
                                     msg += f"  CSV : {csv_path}\n"
                                 self.gui_queue.put(("log", msg))
 
+                        self.gui_queue.put(("progress_model", model_label, fh, fh, model_index, total_models))
                         self.gui_queue.put(("log", f"Darts-{model_label} forecast completed.\n"))
                     except Exception:
                         err = traceback.format_exc()
