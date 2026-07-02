@@ -39,6 +39,88 @@ and makes the package importable with no `PYTHONPATH`/`sys.path` tweaking. Verif
 python -c "import dynamix.constants, dynamix.stat, opt.opt_config; print('install OK')"
 ```
 
+> **Prefer conda?** For a path-based conda environment (easy to locate and delete) and a CUDA
+> GPU build of PyTorch, see [§2b](#2b-alternative-install-conda-path-based-env-with-cuda-gpu).
+
+---
+
+## 2b. Alternative install: conda (path-based env, with CUDA GPU)
+
+Use this if you prefer **conda** and want the environment in a **known folder** you can locate
+and delete easily, and/or you want a **CUDA GPU** build of PyTorch. A *prefix* env
+(`conda create -p <path>`) lives entirely under a directory you choose — unlike a *named* env
+buried in conda's central store. Python **3.11** is used deliberately: every optional model
+extra (`chaospy`, `torch`, `darts`) publishes prebuilt wheels for it, so nothing builds from
+source.
+
+**1. Create the environment (Python 3.11) at a path you choose**
+
+```bash
+conda create -p ./.conda-env python=3.11 -y
+conda activate ./.conda-env          # prefix envs are activated by path, not by name
+```
+
+The whole environment now lives under `./.conda-env` (use any path you like — inside or outside
+the repo). To remove it later:
+
+```bash
+conda deactivate
+conda env remove -p ./.conda-env     # or simply: rm -rf ./.conda-env
+```
+
+**2. Clone the repository**
+
+```bash
+git clone https://github.com/nekiee13/CC_Loto.git
+cd CC_Loto
+```
+
+**3. Install core dependencies + the package**
+
+```bash
+pip install -r requirements.txt      # core runtime: pandas/numpy/scipy/scikit-learn/plotly + pulp
+pip install -e . --no-deps           # make `dynamix` + `opt` importable and add the console scripts
+```
+
+`requirements.txt` lists **core** deps only; the model families (`chaospy`, `torch`, `darts`)
+are commented out on purpose — install them in step 4. `--no-deps` skips re-resolving what
+`requirements.txt` already provided. (Plain `pip install -e .` also works and is equivalent to
+the venv quick-start in [§2](#2-quick-start-core).)
+
+**4. Install PyTorch with CUDA, then the model families**
+
+Install the CUDA build of PyTorch **first**, from the official index, so nothing installed later
+pulls a CPU-only `torch`. Match the CUDA tag (`cu121`, `cu124`, …) to your driver — pick the
+command from <https://pytorch.org/get-started/locally/>.
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu124   # example: CUDA 12.4
+pip install darts chaospy                                              # Darts + PCE-NARX, reusing the CUDA torch
+```
+
+- **Darts** pulls `pytorch-lightning`; installing it *after* the CUDA `torch` keeps the GPU build
+  (a fresh `pip install darts` on its own can pull a CPU `torch`).
+- **DynaMix** additionally needs the external DynaMix HuggingFace model package in the sibling
+  `DynaMix-python/` directory — see [§6](#6-optional-model-dependencies).
+- **Conda-native alternative** for PyTorch (run *before* `pip install darts`):
+  `conda install pytorch pytorch-cuda=12.4 -c pytorch -c nvidia`.
+
+**5. Verify the installation (including GPU)**
+
+```bash
+python -c "import dynamix.constants, dynamix.stat, opt.opt_config; print('install OK')"
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"   # expect True on a GPU box
+python -c "from dynamix import device; print(device.describe_device())"          # expect: GPU (CUDA)
+python run_tests.py --include-optional      # model-dependent tests now run instead of skipping
+dynamix-cli --help
+```
+
+On a working GPU install: `torch.cuda.is_available()` prints `True`, the device label reads
+`GPU (CUDA)` (also shown on the GUI Home page and sidebar), and the optional test layer runs
+rather than skipping. Darts uses the GPU automatically when one is present (Lightning `auto`); to
+*require* it, add `DARTS_FORCE_GPU = True` to `src/dynamix/constants.py` — this is guarded, so it
+falls back to CPU (no crash) if no CUDA device is found.
+
 ---
 
 ## 3. Dependency tiers (extras)
@@ -174,6 +256,7 @@ Other tunables live in `src/dynamix/constants.py` (forecasting/stats) and `opt/o
 | `pip install` picks no wheels / build errors on Python 3.14 | model extras lack 3.14 wheels | use Python **3.11/3.12** |
 | `ModuleNotFoundError: No module named 'tkinter'` | Tkinter not installed | `sudo apt install python3-tk` (GUI only) |
 | `PyTorch is not installed. DynaMix forecasting is disabled.` | informational | install `.[models]` only if you want DynaMix |
+| `torch.cuda.is_available()` is `False` on a GPU machine | a CPU-only `torch` wheel got installed (e.g. pulled in by `darts`) | reinstall the CUDA build first: `pip install torch --index-url https://download.pytorch.org/whl/cu124` ([§2b](#2b-alternative-install-conda-path-based-env-with-cuda-gpu)), then reinstall `darts` |
 
 ---
 
