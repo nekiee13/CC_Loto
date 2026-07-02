@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import math
 import sys
 import warnings
 from pathlib import Path
@@ -93,8 +94,14 @@ def _format_forecast_index_label(idx0: Any, *, index_name: Optional[str] = None)
         return str(idx0)
 
 
-def format_val(val: Any) -> str:
-    """Format value to 2 decimal places."""
+def format_ball_val(val: Any, ts: str) -> str:
+    """Format a forecast value as an integer ball number for the console table.
+
+    Rounds the raw model output to the nearest integer (half-up) and clamps it
+    into the series' valid domain (``C.TS_VALUE_DOMAINS[ts]``), so the table
+    never shows an impossible number such as ``0`` or a value above the series
+    maximum. Missing / non-numeric values render as ``"N/A"``.
+    """
     if val is None:
         return "N/A"
     try:
@@ -103,9 +110,17 @@ def format_val(val: Any) -> str:
     except Exception:
         pass
     try:
-        return f"{float(val):.2f}"
+        f = float(val)
     except Exception:
         return str(val)
+
+    n = int(math.floor(f + 0.5))  # half-up rounding for display
+
+    bounds = getattr(C, "TS_VALUE_DOMAINS", {}).get(str(ts))
+    if bounds:
+        lo, hi = int(bounds[0]), int(bounds[1])
+        n = max(lo, min(hi, n))
+    return str(n)
 
 
 def get_first_forecast_step(
@@ -189,7 +204,7 @@ def run_single_mode(ts_df: pd.DataFrame, target_col: str, fh: int, effective_win
         dm_res = DCore.run_dynamix_forecast(ts_df=ts_win, target_col=target_col, forecast_horizon=fh)
         dm_df = dm_res.get("forecast_df") if isinstance(dm_res, dict) else None
         d_str, val = get_first_forecast_step(dm_df, target_col)
-        rows.append(["DynaMix", d_str, format_val(val)])
+        rows.append(["DynaMix", d_str, format_ball_val(val, target_col)])
     except Exception as e:
         log.error(f"DynaMix failed: {e}")
         rows.append(["DynaMix", "N/A", "N/A"])
@@ -199,7 +214,7 @@ def run_single_mode(ts_df: pd.DataFrame, target_col: str, fh: int, effective_win
     try:
         pce_df = PCE.predict_pce_narx(data=ts_win, target_col=target_col, forecast_horizon=fh)
         d_str, val = get_first_forecast_step(pce_df, "PCE_Pred")
-        rows.append(["PCE", d_str, format_val(val)])
+        rows.append(["PCE", d_str, format_ball_val(val, target_col)])
     except Exception as e:
         log.error(f"PCE-NARX failed: {e}")
         rows.append(["PCE", "N/A", "N/A"])
@@ -217,7 +232,7 @@ def run_single_mode(ts_df: pd.DataFrame, target_col: str, fh: int, effective_win
                 )
                 f_df = res.get("forecast_df") if isinstance(res, dict) else None
                 d_str, val = get_first_forecast_step(f_df, target_col)
-                rows.append([model, d_str, format_val(val)])
+                rows.append([model, d_str, format_ball_val(val, target_col)])
             except Exception as e:
                 log.error(f"Darts-{model} failed: {e}")
                 rows.append([model, "N/A", "N/A"])
@@ -260,7 +275,7 @@ def run_batch_mode(ts_df: pd.DataFrame, fh: int, effective_window: int) -> None:
 
         if dm_df is not None and not dm_df.empty:
             for col in ts_cols:
-                dm_row.append(format_val(dm_df[col].iloc[0] if col in dm_df.columns else None))
+                dm_row.append(format_ball_val(dm_df[col].iloc[0] if col in dm_df.columns else None, col))
         else:
             dm_row.extend(["N/A"] * len(ts_cols))
     except Exception as e:
@@ -282,7 +297,7 @@ def run_batch_mode(ts_df: pd.DataFrame, fh: int, effective_window: int) -> None:
             d_s, val = get_first_forecast_step(pce_df, "PCE_Pred")
             if pce_date == "N/A":
                 pce_date = d_s
-            pce_vals.append(format_val(val))
+            pce_vals.append(format_ball_val(val, col))
         except Exception as e:
             log.error(f"PCE failed for {col}: {e}")
             pce_vals.append("N/A")
@@ -311,7 +326,7 @@ def run_batch_mode(ts_df: pd.DataFrame, fh: int, effective_window: int) -> None:
                     d_s, val = get_first_forecast_step(f_df, col)
                     if m_date == "N/A":
                         m_date = d_s
-                    m_vals.append(format_val(val))
+                    m_vals.append(format_ball_val(val, col))
                 except Exception as e:
                     log.error(f"Darts-{model} failed on {col}: {e}")
                     m_vals.append("N/A")

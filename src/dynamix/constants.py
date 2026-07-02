@@ -24,7 +24,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import Dict, List, Tuple
 
 
 # ----------------------------------------------------------------------
@@ -96,6 +96,22 @@ DATE_FORMAT: str = "%d/%m/%Y"
 
 TS_COLUMNS: List[str] = [f"TS_{i}" for i in range(1, 8)]
 EXPECTED_NUM_SERIES: int = 7
+
+# Inclusive valid integer domain (ball-number range) per positional series.
+# TS_1..TS_5 are main balls (1..50); TS_6/TS_7 are bonus balls (1..12). The
+# Stage-1 forecast console table rounds each model value to the nearest integer
+# and clamps it into these bounds so it never shows an impossible number (e.g. 0
+# or a value above the series maximum). Keep in sync with opt.OptConfig's
+# ts_value_domains (opt/ is a standalone package and carries its own copy).
+TS_VALUE_DOMAINS: Dict[str, Tuple[int, int]] = {
+    "TS_1": (1, 50),
+    "TS_2": (1, 50),
+    "TS_3": (1, 50),
+    "TS_4": (1, 50),
+    "TS_5": (1, 50),
+    "TS_6": (1, 12),
+    "TS_7": (1, 12),
+}
 
 # "event"    = index is event-number-based (allows duplicate dates, strict row sequence)
 # "calendar" = strictly date-based (enforces daily frequency, deduplicates dates)
