@@ -7,7 +7,7 @@ scoreboard).
 
 **Status legend:** ⬜ Todo · 🟡 In progress · 🔵 In review · ✅ Done · ⏸️ Blocked · ❌ Dropped
 
-_Last updated: 2026-07-01 (ALL epics complete — 21/21)_
+_Last updated: 2026-07-03 (ALL epics complete — 21/21; + post-plan forecast-domain fixes)_
 
 ---
 
@@ -95,6 +95,25 @@ Record dated entries as work lands (newest first). Example format:
   docs + tooling in place (see git history through commit 1bec389).
 ```
 
+- 2026-07-03 — **Live-testing fix: forecast values constrained to each series' valid domain.**
+  Three commits fixing implausible forecast output surfaced during live testing — a next-step
+  ticket contained a `0`, below every series minimum. Root cause: candidate ball values were
+  never clamped to a valid range (rounded model forecasts, incl. undershoots to 0, flowed
+  straight through; the truth-frequency fallback also returned a literal `0` sentinel).
+  **(1) `e006a52` — Stage-3 tickets:** added per-series `ts_value_domains` (TS_1..5 = 1..50,
+  TS_6/7 = 1..12) to `opt.OptConfig` with `domain_for`/`clamp_value`; `ConditionalProbEngine`
+  now clamps candidate values in `build_shortlists_for_step`, and `_fallback_value_for_ts`
+  returns the series minimum instead of `0` (kept out of `config_identity` so existing runs still
+  resume and simply get corrected values). Regression test
+  `tests/optimization/test_candidate_value_clamp.py` (with a guard so it can't go vacuous).
+  **(2) `5377c87` — Stage-1 console table:** added a mirrored `TS_VALUE_DOMAINS` to
+  `dynamix.constants` and replaced `format_val` (raw float, 2 decimals) with
+  `format_ball_val(val, ts)` (half-up round + clamp) across single and batch modes; missing
+  values still render `N/A`. Tests `tests/core_unit/test_forecast_display.py`.
+  **(3) `256cef9` — docs:** `User_manual.md` troubleshooting note that forecast numbers are now
+  whole and in-range. Display/selection only — no model or grid semantics changed; `opt/` keeps
+  its own domain copy since it's a standalone package. Suite: **177 tests, OK (skipped=5)**.
+  Post-plan maintenance (outside the 21 epic tasks).
 - 2026-07-01 — **E6.2 done → Epic E6 complete (2/2); plan finished 21/21.** Replaced the
   `run_evolutionary` deterministic stub with a real seeded genetic algorithm over the four strategy
   hyperparameters `{max_overlap_k, shortlist_m, beam, hit_threshold}`. Fitness is the EVAL portfolio
