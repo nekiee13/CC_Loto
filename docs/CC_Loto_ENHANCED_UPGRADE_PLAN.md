@@ -1,8 +1,11 @@
 # CC_Loto Enhanced Upgrade Plan (v2)
 
-**Status:** Proposed
+**Status:** Proposed · **Version:** 2.1
 **Supersedes:** `docs/CC_Loto_PROJECT_UPGRADE_PLAN.md` (the draft plan)
 **Basis:** Draft plan cross-checked against the repository at commit `570d2c8` (code, tests, CI, packaging, docs) on 2026-07-04.
+**v2.1 additions:** second-pass big-picture critique (section 1.4) grounded in structural
+metrics (dead-code scan, dependency cycles, complexity hotspots) and a verified data-structure
+fact about `DATA.csv`; new AFI-19..23 and epics U14–U17.
 
 ---
 
@@ -89,6 +92,89 @@ was reframed to target only the true remaining gap. Several new areas for improv
 - **AFI-18 — Dual dependency declarations.** `pyproject.toml` dependencies "mirror
   requirements.txt" by hand (comment at `pyproject.toml:15`). Nothing tests that the two
   stay consistent.
+- **AFI-19 — The detector has never been calibrated.** The pipeline is a signal
+  detector, but it has never been run against data with a *known* answer. When the
+  scoreboard says "no edge", nothing distinguishes *there is no edge* from *this
+  pipeline cannot detect edges*. No test anywhere plants a synthetic bias and checks
+  the system finds it. (→ Epic U14)
+- **AFI-20 — The positional series are order statistics with a closed-form null, and
+  nothing exploits that.** Verified against `DATA.csv` (613 rows): TS_1..TS_5 are
+  **strictly increasing in every single row**, and TS_6 < TS_7 in every row; the
+  per-column envelopes (TS_1 max = 38, TS_5 min = 14) are classic order-statistic
+  shrinkage. So the data is exactly the sorted output of a 5-of-50 + 2-of-12 draw.
+  Position *k* is the *k*-th order statistic of a draw without replacement — its null
+  distribution has a closed form, and positions are deterministically correlated by
+  construction. The project currently estimates these analytically-known distributions
+  with torch/Darts/chaospy sequence models, and has no analytic baseline to beat.
+  (→ Epic U15)
+- **AFI-21 — No permutation-test control.** The random-ticket baseline (U1) controls
+  for ticket luck, but nothing controls for *temporal* structure: shuffling the draw
+  history and re-running should destroy any real edge, and that experiment doesn't
+  exist. (→ Epic U16)
+- **AFI-22 — Complexity hotspots, unguarded.** Structural scan results:
+  `stat.py::run_statistics` cyclomatic **74**, `entrypoints/gui.py::_run_forecast_worker`
+  **77**, `stat.py::print_overlay_witness_report` **35**,
+  `webapp/app.py::render_job_panel` **25 with the repo's highest churn** (12 commits/90
+  days — the statistically likeliest birthplace of the next bug), and
+  `tools/maintenance/fix_darts_install.py::main` **69**. Repo average is a healthy 4.9
+  and there are **zero dependency cycles** — the debt is concentrated in a handful of
+  giant functions, not smeared across the architecture. No complexity ceiling exists to
+  stop them growing. (→ Epic U17)
+- **AFI-23 — Dead code is a non-issue, but the tooling lies about it.** An automated
+  dead-code scan reported 11.3% dead symbols; manual verification showed these are
+  false positives (the import-graph resolver cannot follow `src/`-layout and
+  try/except-guarded imports — e.g. `plotting` and `pce_narx` were flagged dead but are
+  demonstrably imported). Real orphans found: `tools/darts/check_darts_params.py`
+  (zero-symbol scratch script) and the never-discovered test from AFI/U0. Future
+  dead-code hunting should use ruff F401/F841 or vulture, which handle src-layout
+  correctly. (→ folded into U9.1 and U10.1)
+
+### 1.4 Second-pass critique — the bigger picture
+
+*(Written after the structural scan; this is the assessment that motivates epics
+U14–U17. Kept in the plan so the rationale survives next to the work items.)*
+
+**As engineering, this project is an unusually good POC.** Most lottery-prediction
+projects are numerology in a notebook. This one has leakage guards with fingerprinted
+resume, an honest scoreboard against a random control, file contracts between decoupled
+stages, fail-soft optional dependencies, layered tests, CI, and a lockfile — with zero
+dependency cycles, which is structural evidence that the stage decoupling is real
+rather than aspirational. The pipeline skeleton is transferable wholesale to legitimate
+forecasting/quant work, and that skeleton — not the lottery edge — is the valuable
+artifact.
+
+**Central critique: the instrument was built but never calibrated.** Every measurement
+device is validated against known references before its readings are trusted. This
+pipeline reads "no edge" on real data — but it has never been pointed at data where the
+right answer is known. Until it demonstrably (a) reports NO_EDGE on synthetic pure-random
+data and (b) *finds* a deliberately planted bias, its null result is uninterpretable.
+Calibration transforms the project's claim from "I hunted an elusive target and found
+nothing" into "I built a **validated** detector and it reads zero" — a scientifically
+complete result, and a far stronger POC. This is Epic U14, and it is the single highest-
+value addition in this plan.
+
+**Second: sequence models were brought to a histogram fight.** With the order-statistic
+structure now verified (AFI-20), each position's null distribution is *computable
+exactly*. Under the fair-lottery hypothesis there is no temporal signal, so the correct
+first models are: the analytic order-statistic null (free, exact), then a frequency
+sampler (cheap, empirical). Heavy sequence models (torch/DynaMix, Darts, PCE-NARX) are
+the most expensive possible way to approximate a known histogram, and they should have
+to *beat* the analytic null out-of-sample to justify their runtime. Epic U15 adds the
+analytic family and — as a bonus — a direct fairness test of the lottery itself
+(empirical vs theoretical position distributions).
+
+**Third: effort allocation is inverted.** Four portfolio optimizers (greedy/MILP/
+bandit/evo) sit on top of a single TRAIN/EVAL split. The optimizer layer can only be as
+good as the probabilities feeding it; when those are near-flat, differences between
+MILP and evolutionary search are noise being polished. The plan's ordering already
+corrects this (uncertainty and walk-forward land before more optimizer work), and U16
+adds the missing temporal control: a permutation test in which any edge that survives
+history-shuffling is by definition an artifact.
+
+**Hygiene verdict:** dead code is effectively absent (AFI-23); the real debt is five
+giant functions (AFI-22). The remedy is containment (a complexity ceiling so they stop
+growing) plus extract-on-touch (any task that modifies one pulls the touched logic out
+into a pure, tested helper) — not a big-bang refactor.
 
 ---
 
@@ -738,6 +824,243 @@ language for other strategies is phrased relative to controls ("does not beat na
 
 ---
 
+## Milestone M6 — Scientific Instrument Validation *(new in v2.1)*
+
+### EPIC U14 — Detector Calibration: Planted-Signal Validation *(new — from AFI-19)*
+
+**Priority:** P0 · **Type:** science / validation · **Status:** Proposed · **Depends on:** U13 (synthetic generator, naive family), U1 (verdict labels)
+
+**What:** Prove the pipeline can tell signal from noise on data where the truth is
+known: it must report NO_EDGE on synthetic pure-random draws, and it must *detect* a
+deliberately planted bias. Then measure the smallest bias it can see at the real
+dataset's size (power analysis) and stamp the result into the reports.
+
+**Why:** This is the highest-value epic in the plan. Without it, every scoreboard
+verdict on real data is uninterpretable — "no edge found" could mean "no edge exists"
+or "this instrument is blind". With it, the project's null result becomes a validated
+measurement, which is the strongest scientific claim a random-domain POC can make.
+
+> **Comment:** This epic deliberately reuses everything: U13.3's generator (extended
+> with a bias parameter), the normal three-stage pipeline unmodified, and U1's verdict
+> labels as the detection criterion. The pipeline under test is the *production*
+> pipeline — a special "test mode" would defeat the purpose.
+
+#### Task U14.1 — Biased synthetic generator
+
+**What:** Extend the U13.3 synthetic generator with a bias specification, e.g.
+`bias={"ball": 7, "weight": 1.3}` — ball 7 drawn 30% more often than fair — while all
+outputs stay valid sorted draws in-domain. Seeded and deterministic.
+
+**Why:** A planted, quantified, reproducible signal is the known reference every
+calibration needs.
+
+**Acceptance criteria:**
+- Generated data passes U5.4 ingest validation and the sortedness property.
+- Empirical frequency of the biased ball in a large generated sample matches the
+  requested weight (statistical test in the unit test, fixed seed).
+- `weight=1.0` reproduces the unbiased generator byte-for-byte (same seed).
+
+#### Task U14.2 — Null calibration: NO_EDGE on pure-random data
+
+**What:** Integration test: full pipeline (naive + any available families → StatGrid →
+optimize) on seeded pure-random synthetic data must yield a scoreboard verdict of
+`NO_EDGE` (or `UNCERTAIN`, never an edge claim) for every strategy.
+
+**Why:** A detector that finds edges in white noise is worse than no detector. This
+test makes false-positive behavior a CI failure.
+
+**Acceptance criteria:**
+- Deterministic given fixed seeds (no flaky statistical assertions).
+- Runs in default CI without optional deps (naive family suffices).
+- A comment documents the seed-selection so a future seed change is a conscious act.
+
+#### Task U14.3 — Detection calibration: planted bias is found
+
+**What:** Same pipeline on data with a *strong* planted bias (magnitude chosen so
+detection is unambiguous at the fixture's draw count) must produce a verdict of at
+least `WEAK_EDGE` for the best strategy, and the fairness diagnostic (U15.4, once it
+exists) must flag the biased ball.
+
+**Why:** The complement of U14.2 — proves the instrument is not blind. Together they
+bracket the detector's behavior.
+
+**Acceptance criteria:**
+- Deterministic given fixed seeds; runs in default CI.
+- Test documents the planted bias magnitude and why it must be detectable at that n.
+- Failure message distinguishes "pipeline errored" from "pipeline ran but missed the
+  signal".
+
+#### Task U14.4 — Power sweep: minimal detectable bias
+
+**What:** Opt-in script (not CI): grid over bias magnitude × history length, K seeds
+per cell → detection-rate table written to `docs/detector_power.md` with the row
+closest to the real dataset's size (~613 draws) highlighted.
+
+**Why:** This answers the question that contextualizes *all* real-data results: "what
+is the smallest edge this instrument could even see given ~613 draws?" Any real
+per-ball bias smaller than that threshold is invisible by construction — a fact users
+deserve to see next to the scoreboard.
+
+**Acceptance criteria:**
+- Script is seeded, resumable-or-fast, and documented; runtime bounded and stated.
+- Output table includes detection rate per (bias, n) cell and the highlighted
+  real-data row.
+- `docs/INDEX.md` (U7.1) lists the report as a dated snapshot.
+
+#### Task U14.5 — Instrument-status stamp in reports
+
+**What:** Scoreboard/summary gains a short block: calibration suite version, date of
+last U14.2/U14.3 pass, and a one-line pointer to the power table ("edges below ~X%
+per-ball bias are undetectable at n=613").
+
+**Why:** The no-edge caveat becomes quantitative. A verdict shown next to the
+instrument's measured sensitivity cannot be over-read in either direction.
+
+**Acceptance criteria:**
+- Block present in summary JSON and GUI Optimize & Score page.
+- Wording reviewed against the SRS no-efficacy statement (consistency, not
+  contradiction).
+
+---
+
+### EPIC U15 — Analytic Order-Statistic Null Model *(new — from AFI-20)*
+
+**Priority:** P1 · **Type:** science / feature · **Status:** Proposed · **Depends on:** U13 (model-family mechanism)
+
+**What:** Implement the exact null distribution of each position (k-th order statistic
+of 5-of-50, resp. 2-of-12, without replacement), register it as a zero-dependency
+"analytic" forecaster family, and add a fairness diagnostic comparing `DATA.csv`'s
+empirical position distributions against the theory.
+
+**Why:** The verified row-level sortedness (AFI-20) means every position's marginal
+under the fair-lottery hypothesis is *known in closed form* — no learning required.
+This gives (a) the scientifically correct baseline every learned model must beat,
+(b) a direct test of whether the lottery source deviates from fairness at all (the
+only question with a possible edge behind it), and (c) it is nearly free: the pmf is
+one hypergeometric-style formula.
+
+> **Comment (the formula):** for a draw of m balls from {1..N}, the k-th order
+> statistic X₍ₖ₎ satisfies P(X₍ₖ₎ = x) = C(x−1, k−1)·C(N−x, m−k) / C(N, m). Two
+> parameters (N=50, m=5 and N=12, m=2) cover all seven series. A property test against
+> Monte Carlo sampling pins the implementation.
+
+#### Task U15.1 — Record the draw-structure fact
+
+**What:** Document in `architecture.md` (and SRS data section): TS_1..TS_5 are the
+sorted balls of one 5-of-50 draw, TS_6..TS_7 of one 2-of-12 draw — verified strictly
+monotone in all 613 rows. Add the row-sortedness check to U5.4's ingest validation.
+
+**Why:** The whole epic rests on this fact; it must be written down and enforced at
+ingest so a future data-source change cannot silently invalidate the analytic model.
+
+**Acceptance criteria:**
+- Docs state the structure and the verification date/row count.
+- Ingest validation rejects a row where TS_1..TS_5 is not strictly increasing (or
+  TS_6 ≥ TS_7), with a clear message.
+
+#### Task U15.2 — Order-statistic pmf module
+
+**What:** Pure module `dynamix/order_stats.py`: `pmf(k, N, m)` → exact distribution
+vector; mean/mode/quantile helpers. numpy-only.
+
+**Why:** One small, exactly-testable module is the foundation for the family, the
+fairness test, and any future distributional scoring.
+
+**Acceptance criteria:**
+- pmf sums to 1 (exact within float tolerance) for all seven (k, N, m) combos.
+- Property test: agreement with a seeded Monte Carlo sampler (KS distance below
+  threshold at large sample size).
+- Closed-form mean matches the textbook formula m·... — asserted for known cases.
+
+#### Task U15.3 — "analytic" forecaster family
+
+**What:** Register an always-available family whose per-position forecast is derived
+from the exact null (configurable point summary: mode or expected value), flowing
+through stat backtest and StatGrid like every other family.
+
+**Why:** The provably optimal fair-lottery point forecast, at zero runtime cost —
+the floor every learned model must beat to claim anything.
+
+**Acceptance criteria:**
+- Appears in model listings; produces in-domain forecasts for all 7 series, no
+  optional deps.
+- Backtest rows carry correct provenance; golden test on a tiny grid.
+- Deterministic (it's a constant per position, given the domain).
+
+#### Task U15.4 — Lottery fairness diagnostic
+
+**What:** Report + GUI section: per position, empirical `DATA.csv` distribution vs
+analytic pmf (chi-square or exact multinomial test), p-values with multiple-testing
+correction; plus per-ball raw frequency vs expectation for the unsorted view.
+
+**Why:** This is the *actual* scientific question of the project — "does this lottery
+deviate from fair?" — answered directly instead of through model residuals. It is also
+U14.3's detection oracle for planted biases.
+
+**Acceptance criteria:**
+- Runs on real and synthetic data; output includes test statistic, p-value, and a
+  plain-language line ("consistent with a fair draw" / "deviation detected at ball X").
+- On U14.1 biased fixtures, the diagnostic flags the planted ball (tested).
+- Multiple-testing handling documented (7 positions + 62 balls ≠ free lunch).
+
+#### Task U15.5 — Analytic family on the scoreboard
+
+**What:** Scoreboard treats the analytic family as the reference control row (alongside
+naive from U13.5); verdict phrasing for learned models becomes relative: "does not beat
+the analytic null".
+
+**Why:** Beating random tickets is a low bar; beating the exact null is the honest one.
+
+**Acceptance criteria:**
+- Control row present whenever analytic rows exist in the grid.
+- User Manual explains the hierarchy: analytic null ≥ naive ≥ random tickets.
+
+---
+
+### EPIC U16 — Permutation-Test Control *(new — from AFI-21)*
+
+**Priority:** P1 · **Type:** science / validation · **Status:** Proposed · **Depends on:** U1 (edge metrics), ideally after U2
+
+**What:** An opt-in control mode that destroys temporal structure (deterministically
+shuffles draw order) and re-runs the optimizer: any "edge" that survives is an
+artifact; the distribution of shuffled-history edges yields an empirical p-value for
+the real edge.
+
+**Why:** The random-ticket baseline controls for ticket luck; nothing controls for
+*time*. Every forecasting model in the pipeline claims temporal signal; permutation is
+the classic, assumption-free test of exactly that claim.
+
+#### Task U16.1 — Deterministic history-permutation mode
+
+**What:** `--control permutation --control-seed S`: permute the event order of the
+grid's truth rows (marginals preserved, time destroyed) via the existing slicing
+machinery, then run the standard optimize; summary is written to a separate
+`control_*.json`, clearly labeled.
+
+**Why:** Operating at StatGrid level keeps it cheap (no re-forecasting) and reuses the
+leakage-safe slice path unchanged.
+
+**Acceptance criteria:**
+- Same seed → identical permutation → identical control summary.
+- Control summaries are unambiguously labeled and never overwrite real summaries.
+- Fingerprint/resume machinery refuses to mix control and real state.
+
+#### Task U16.2 — Permutation p-value report
+
+**What:** Run K seeded permutations (config, default small), collect the null
+distribution of edge EUR, report the real edge's percentile as an empirical p-value in
+the scoreboard; GUI shows it beside the baseline percentile from U1.2.
+
+**Why:** "Real edge at the 54th percentile of shuffled-history edges" is the single
+most honest sentence this system can print.
+
+**Acceptance criteria:**
+- Deterministic given the seed set; K and runtime documented.
+- Scoreboard gains `permutation_p` per strategy; contract test updated.
+- User Manual explains the interpretation in one paragraph.
+
+---
+
 ## Milestone M4 — Engineering Hygiene & Portability
 
 ### EPIC U9 — Static Quality Gates *(new — from AFI-13)*
@@ -791,6 +1114,65 @@ bugs are silent-and-costly is the 80/20.
 - Listed modules pass `mypy --strict` (or documented per-module relaxations).
 - CI job exists; flipped to blocking once green for two weeks.
 - Config lists the covered modules explicitly, with a one-line "why these".
+
+---
+
+### EPIC U17 — Complexity Hotspot Containment *(new — from AFI-22)*
+
+**Priority:** P2 · **Type:** quality / refactor policy · **Status:** Proposed · **Depends on:** U9.1 (ruff)
+
+**What:** Stop the five giant functions from growing (complexity ceiling), adopt an
+extract-on-touch rule, and perform one targeted extraction on the worst offender that
+other epics will touch anyway (`run_statistics`, cyclomatic 74).
+
+**Why:** The scan shows the repo's average complexity is a healthy 4.9 with zero
+dependency cycles — the debt is concentrated in `run_statistics` (74),
+`_run_forecast_worker` (77), `print_overlay_witness_report` (35), `render_job_panel`
+(25 + highest churn), and `fix_darts_install.main` (69). Churn × complexity is the
+best-known predictor of where the next bug appears. Containment plus opportunistic
+extraction is the KISS response; a big-bang refactor is explicitly *not* proposed.
+
+#### Task U17.1 — Complexity ceiling in ruff
+
+**What:** Enable mccabe (`C901`) with the max set just above the current worst
+offender, plus per-file ignores listing the five known functions by name; document the
+ratchet rule (ceiling only ever moves down).
+
+**Why:** Free regression-stop: nothing new may be born this complex, and the known
+five are grandfathered explicitly rather than silently.
+
+**Acceptance criteria:**
+- CI fails if any *new* function exceeds the ceiling.
+- The grandfathered list is in config with a comment linking this epic.
+- Ceiling value + ratchet rule documented.
+
+#### Task U17.2 — Extract-on-touch rule
+
+**What:** One paragraph in CLAUDE.md (and CONTRIBUTING if created): any task that
+modifies logic inside a grandfathered function must extract the touched logic into a
+pure, tested helper as part of the same change.
+
+**Why:** Converts every future feature that grazes a hotspot into a small down-payment
+on the debt, with zero dedicated refactor budget.
+
+**Acceptance criteria:**
+- Rule written where AI-assisted and human contributors will actually see it.
+- The grandfathered list in U17.1 is referenced as the trigger set.
+
+#### Task U17.3 — First extraction: `run_statistics`
+
+**What:** Extract 2–3 pure helpers from `stat.py::run_statistics` (per-step scoring,
+per-model accumulation — the pieces U5.6 and U13.2 will touch anyway), each with unit
+tests; behavior locked by the existing golden/contract tests before and after.
+
+**Why:** Highest-complexity function on the busiest path, and two planned epics
+already need to modify it — extracting first makes those epics safer and this refactor
+non-gratuitous.
+
+**Acceptance criteria:**
+- Golden/candidate-grid contract tests pass unchanged (bit-identical outputs).
+- `run_statistics` cyclomatic complexity drops materially (target: below ~40).
+- New helpers are pure (no I/O) and unit-tested.
 
 ---
 
@@ -1044,17 +1426,21 @@ science, then hardening. Independent tracks can interleave.
 | 1 | **U0** Truth & wiring fixes | P0 | 15-minute fixes; everything downstream assumes docs and test runner tell the truth |
 | 2 | **U3** Health diagnostics | P0 | Unblocks humans *and* U8 reuses its collector; immediately useful on every machine |
 | 3 | **U5** Domain authority + contracts | P0 | Protects the recently-fixed correctness bug before new display surface (U1.5, U3.4) is added |
-| 4 | **U1** Scoreboard uncertainty | P0 | Core honesty upgrade; U2/U6 build on its CI helpers |
-| 5 | **U13** Naive baseline + demo + e2e CI | P1 | Early because its e2e test then guards all remaining work; scoreboard control row lands with U1 fresh |
-| 6 | **U2** Walk-forward | P0 | Needs U1's per-fold CI reporting; feeds U6 |
-| 7 | **U9** Static quality gates | P1 | Cheapest before the M2/M3 code volume lands — but after the P0 rush so the initial cleanup doesn't conflict |
-| 8 | **U4** Schema consumer-side versioning | P1 | Contract hardening before any future grid change; U10 depends on its fixtures |
-| 9 | **U6** Stability & recommendation | P1 | Consumes U1 + U2 outputs |
-| 10 | **U11** Windows + newer-Python CI | P1 | Do before declaring the GUI production-ready on the target OS |
-| 11 | **U8** Audit pack | P2 | Reuses U3 collector; most valuable once runs get longer (post walk-forward) |
-| 12 | **U12** Progress protocol | P2 | Quality-of-life; regression fixtures already exist from history |
-| 13 | **U10** tools/ status + tests | P2 | Depends on U4 fixtures |
-| 14 | **U7** Docs governance | P2 | Last so the index is written against the post-upgrade doc set (U0 already fixed the acute drift) |
+| 4 | **U1** Scoreboard uncertainty | P0 | Core honesty upgrade; U2/U6/U14 build on its CI helpers and verdict labels |
+| 5 | **U13** Naive baseline + demo + e2e CI | P1 | Early because its e2e test then guards all remaining work; U14 needs its generator |
+| 6 | **U14** Detector calibration | P0 | The plan's highest-value epic; needs only U13's generator + U1's verdicts; after it, every later result is interpretable |
+| 7 | **U2** Walk-forward | P0 | Needs U1's per-fold CI reporting; feeds U6 |
+| 8 | **U16** Permutation control | P1 | Cheap once U1/U2 exist; completes the control set (tickets, folds, time) |
+| 9 | **U9** Static quality gates (+U17.1 ceiling) | P1 | Cheapest before the M2/M3 code volume lands; the complexity ceiling rides the same PR |
+| 10 | **U15** Analytic null model | P1 | The scientifically correct baseline; also upgrades U14.3's detection oracle |
+| 11 | **U4** Schema consumer-side versioning | P1 | Contract hardening before any future grid change; U10 depends on its fixtures |
+| 12 | **U6** Stability & recommendation | P1 | Consumes U1 + U2 outputs; recommendation gates can now also require beating the analytic null |
+| 13 | **U11** Windows + newer-Python CI | P1 | Do before declaring the GUI production-ready on the target OS |
+| 14 | **U17** Hotspot containment (U17.2–.3) | P2 | `run_statistics` extraction lands right before the epics that touch it are wrapped up |
+| 15 | **U8** Audit pack | P2 | Reuses U3 collector; most valuable once runs get longer (post walk-forward) |
+| 16 | **U12** Progress protocol | P2 | Quality-of-life; regression fixtures already exist from history |
+| 17 | **U10** tools/ status + tests | P2 | Depends on U4 fixtures; includes deleting/labeling the orphan `check_darts_params.py` |
+| 18 | **U7** Docs governance | P2 | Last so the index is written against the post-upgrade doc set (U0 already fixed the acute drift) |
 
 ---
 
@@ -1066,21 +1452,25 @@ science, then hardening. Independent tracks can interleave.
 - **U5** — Single domain authority, output/ingest contracts, OOD diagnostics *(6 tasks)*
 - **U1** — Bootstrap CIs, baseline distribution, verdict labels, GUI bands *(5 tasks)*
 - **U2** — Walk-forward: fold plan, CLI mode, no-resume rule, aggregation *(4 tasks)*
+- **U14** — Detector calibration: biased generator, null test, detection test, power sweep, instrument stamp *(5 tasks)*
 
 ### P1
 - **U13** — Naive model family, synthetic data, true e2e CI, control scoreboard row *(5 tasks)*
 - **U9** — Ruff, coverage floor, targeted mypy *(3 tasks)*
+- **U15** — Order-statistic null: fact record, pmf module, analytic family, fairness diagnostic, scoreboard control *(5 tasks)*
+- **U16** — Permutation control mode + empirical p-value *(2 tasks)*
 - **U4** — Schema detection, normalization registry, golden fixtures, merge-tool registry *(4 tasks)*
 - **U6** — Stability score, recommendation gates, seed sensitivity *(3 tasks)*
 - **U11** — Windows CI, Windows-safe stop, 3.13/3.14 canary *(3 tasks)*
 
 ### P2
+- **U17** — Complexity ceiling, extract-on-touch rule, `run_statistics` extraction *(3 tasks)*
 - **U8** — audit.json, GUI audit surface, runtime trends *(3 tasks)*
 - **U12** — Progress emitter + parser round-trip contract *(2 tasks)*
 - **U10** — tools/ inventory + merge-tool tests *(2 tasks)*
 - **U7** — Docs index, command smoke tests, freshness tripwire *(3 tasks)*
 
-**Total: 14 epics, 52 tasks** — deliberately many small tasks over few large ones.
+**Total: 18 epics, 67 tasks** — deliberately many small tasks over few large ones.
 
 ---
 
@@ -1101,6 +1491,18 @@ enhanced plan makes three kinds of changes:
    the most scientifically interesting one — the absence of a zero-dependency naive
    control model (U13), which turns the project's own "no guaranteed edge" doctrine into
    a measurable scoreboard row.
+4. **Reframing (v2.1).** The second-pass critique (section 1.4) changes what the
+   project's success criterion is. The target lottery is presumed random, so the
+   winning outcome is not "find an edge" but "prove the instrument would have found
+   one". That reframing produces the v2.1 epics: calibrate the detector against
+   planted signals (U14), replace learned approximations of a known distribution with
+   the exact analytic null and test the lottery's fairness directly (U15), close the
+   temporal-control gap with permutation tests (U16), and contain the five complexity
+   hotspots where the next bug is statistically likeliest to appear (U17). With U14
+   and U15 in place, the sentence this project can print at the end — "a calibrated
+   detector, validated on planted signals, finds this lottery consistent with a fair
+   draw and no strategy that beats the exact null" — is a complete, defensible
+   scientific result. That is the strongest form this POC can take.
 
 The architectural constants remain untouched: three decoupled stages, file contracts,
 leakage-safe fitting, fail-soft optional dependencies, and the visible no-edge message.
