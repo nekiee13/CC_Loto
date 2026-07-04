@@ -6,6 +6,12 @@
 **v2.1 additions:** second-pass big-picture critique (section 1.4) grounded in structural
 metrics (dead-code scan, dependency cycles, complexity hotspots) and a verified data-structure
 fact about `DATA.csv`; new AFI-19..23 and epics U14–U17.
+**v2.2 additions:** AFI-24 (missing model-family interface) and Epic U18 — a detailed,
+behavior-preserving refactoring program (family registry, `stat.py` split, GUI worker
+extraction, utility dedup, strategy-module split). U18.2 supersedes U17.3.
+**v2.3 additions:** Epic U19 — five oversight visualizations, each admitted only if it
+exposes information no logged scalar can carry (path, place, shape, time, failure
+location); companion plain-language explainer in `docs/visualization_guide.md`.
 
 ---
 
@@ -128,6 +134,20 @@ was reframed to target only the true remaining gap. Several new areas for improv
   (zero-symbol scratch script) and the never-discovered test from AFI/U0. Future
   dead-code hunting should use ruff F401/F841 or vulture, which handle src-layout
   correctly. (→ folded into U9.1 and U10.1)
+- **AFI-24 — There is no common interface for forecaster model families.**
+  `dynamix_core`, `pce_narx`, and `darts_core` each expose different call signatures,
+  and every caller wires all families by hand with its own try/except + branching:
+  `entrypoints/run_cli.py` (PCE calls at :215 and :296 with local availability
+  branching), `entrypoints/gui.py` (the same wiring re-implemented inside
+  `_run_forecast_worker`, lines ~730–846 — the cyclomatic-77 hotspot), and
+  `candidate_grid.py` (`collect_model_forecasts_for_step` /
+  `_forecast_single_series`, PCE call at :204). This triplication is the structural
+  reason the domain-clamp bug had to be fixed in three places, and it means every new
+  model family (U13 naive, U15 analytic) requires three coordinated edit sites instead
+  of one. Secondary duplication with the same root smell: `_is_event_mode()` copied
+  into four modules (`data_utils`, `pce_narx`, `plotting`, `candidate_grid`),
+  `_repo_root()` copied into at least two, and `_bootstrap_import_paths()` copy-pasted
+  into four test files. (→ Epic U18)
 
 ### 1.4 Second-pass critique — the bigger picture
 
@@ -1121,9 +1141,10 @@ bugs are silent-and-costly is the 80/20.
 
 **Priority:** P2 · **Type:** quality / refactor policy · **Status:** Proposed · **Depends on:** U9.1 (ruff)
 
-**What:** Stop the five giant functions from growing (complexity ceiling), adopt an
-extract-on-touch rule, and perform one targeted extraction on the worst offender that
-other epics will touch anyway (`run_statistics`, cyclomatic 74).
+**What:** Stop the five giant functions from growing (complexity ceiling) and adopt an
+extract-on-touch rule. *(v2.2 note: the targeted extraction formerly here as U17.3 is
+superseded by Epic U18, which does it as part of a structured refactoring program —
+`run_statistics` via U18.2, `_run_forecast_worker` via U18.3.)*
 
 **Why:** The scan shows the repo's average complexity is a healthy 4.9 with zero
 dependency cycles — the debt is concentrated in `run_statistics` (74),
@@ -1159,20 +1180,192 @@ on the debt, with zero dedicated refactor budget.
 - Rule written where AI-assisted and human contributors will actually see it.
 - The grandfathered list in U17.1 is referenced as the trigger set.
 
-#### Task U17.3 — First extraction: `run_statistics`
+*(Task U17.3 removed in v2.2 — superseded by U18.2.)*
 
-**What:** Extract 2–3 pure helpers from `stat.py::run_statistics` (per-step scoring,
-per-model accumulation — the pieces U5.6 and U13.2 will touch anyway), each with unit
-tests; behavior locked by the existing golden/contract tests before and after.
+---
 
-**Why:** Highest-complexity function on the busiest path, and two planned epics
-already need to modify it — extracting first makes those epics safer and this refactor
-non-gratuitous.
+### EPIC U18 — Maintainability Refactoring Program *(new in v2.2 — from AFI-24, AFI-22)*
+
+**Priority:** P1 · **Type:** refactor / architecture · **Status:** Proposed · **Depends on:** U9.1 + U17.1 (refactor under lint + complexity ceiling); **enables** U13, U15, and shrinks two AFI-22 hotspots
+
+**Objective (measurable):** after this epic,
+1. adding a new forecaster family is a **one-file change** (today: three edit sites);
+2. no application module exceeds **~700 lines**, and `run_statistics` /
+   `_run_forecast_worker` drop below cyclomatic **40** (today: 74 / 77);
+3. every one of the copy-pasted utilities (`_is_event_mode`, `_repo_root`,
+   `_bootstrap_import_paths`) has **exactly one definition**;
+4. all of it is **behavior-preserving**, proven by unchanged golden/contract tests —
+   bit-identical StatGrid and forecast outputs.
+
+**Why this epic exists:** the macro-architecture is healthy (zero cycles, clean stage
+contracts), so this is *not* a redesign. The maintenance pain is concentrated at module
+level, and most of it has one root cause: the missing model-family interface (AFI-24).
+Fixing that first makes tasks U13.1/U13.2 and U15.3 trivial, guts the worst complexity
+hotspot for free, and removes the class of "fix the same bug in three places" defects
+(of which the domain clamp was the first instance).
+
+> **Ground rules for every task in this epic (the "how" that eases the process):**
+> 1. **One task = one focused commit (or short commit series), pushed to `main`.**
+>    This is a single-developer, PR-free repo — frequent small commits are the unit of
+>    work. Never mix a move with a behavior change in one commit; if a bug is found
+>    mid-refactor, note it and fix it in its own commit.
+> 2. **Lock first.** Before touching a file, confirm which golden/contract tests cover
+>    it; if coverage is thin, add a characterization test *before* moving code.
+> 3. **Re-export shims.** Old import paths keep working via re-exports for one epic's
+>    grace period (`dynamix.stat` already demonstrates the pattern from the
+>    `candidate_grid` extraction — reuse it verbatim).
+> 4. **Mechanical moves stay mechanical.** Use `git mv` where possible and keep
+>    function bodies byte-identical in move commits, so the diff stays trivially
+>    checkable (future-you is the reviewer).
+> 5. Run `python run_tests.py` plus ruff before every push; green CI on `main` is the
+>    signal that a task is done.
+
+#### Task U18.1 — Introduce the model-family registry
+
+**What:** Create `src/dynamix/families.py` defining the minimal interface and registry:
+
+```python
+class ForecastFamily(Protocol):
+    name: str                                  # "dynamix" | "pce" | "darts" | ...
+    def is_available(self) -> bool: ...        # import-guard lives HERE (fail-soft)
+    def forecast(self, history: pd.DataFrame, ts: str,
+                 horizon: int) -> pd.DataFrame | None: ...
+    # Output contract: DataFrame indexed 1..horizon with a "forecast" float column,
+    # raw (unclamped) model values — clamping stays a display/ticket concern (U5).
+
+REGISTRY: list[ForecastFamily] = [DynamixFamily(), PceFamily(), DartsFamily()]
+def available_families() -> list[ForecastFamily]: ...
+```
+
+Write one adapter per existing core (`DynamixFamily`, `PceFamily`, `DartsFamily`)
+that wraps the current functions **without modifying the cores themselves**: the
+adapter normalizes each core's signature (e.g. `pce_narx.predict_pce_narx(data,
+target_col, forecast_horizon)`) to the interface, and moves the caller-side
+try/except-import into `is_available()` with the existing warning text preserved.
+
+**Why:** This is the single missing abstraction (AFI-24). The adapters isolate all
+signature quirks in one file each; the fail-soft optional-dependency pattern required
+by CLAUDE.md is preserved but now lives in exactly one place per family.
 
 **Acceptance criteria:**
-- Golden/candidate-grid contract tests pass unchanged (bit-identical outputs).
-- `run_statistics` cyclomatic complexity drops materially (target: below ~40).
-- New helpers are pure (no I/O) and unit-tested.
+- Registry + three adapters exist; unit tests cover `is_available()` under simulated
+  missing imports and the output contract shape for a stub family.
+- No caller is migrated yet (that is U18.1b–d) — this task is purely additive, zero
+  behavior change.
+- A stub `FakeFamily` test helper lands in `tests/_builders.py` for later tasks.
+
+#### Task U18.1b — Migrate `candidate_grid.py` to the registry
+
+**What:** Replace the family branching in `collect_model_forecasts_for_step` /
+`_forecast_single_series` with iteration over `available_families()`.
+
+**Why first:** it is the only caller with a golden lock
+(`tests/contract/test_candidate_grid_golden.py`), so it proves the registry faithful
+before the less-tested callers move.
+
+**Acceptance criteria:**
+- Candidate-grid golden test passes **unchanged** (bit-identical rows, including
+  provenance/model-name strings).
+- No `import pce_narx` / `import darts_core` remains in `candidate_grid.py` — only
+  `families`.
+- Per-family error capture (`_err`) behavior preserved: one family failing still
+  yields rows for the others.
+
+#### Task U18.1c — Migrate `entrypoints/run_cli.py` to the registry
+
+**What:** Replace the hand-wired family calls (PCE at :215/:296 and the
+DynaMix/Darts equivalents) with registry iteration; console output (model names,
+warnings for missing families) stays textually identical.
+
+**Why:** Second caller; kills the second copy of the wiring.
+
+**Acceptance criteria:**
+- `dynamix-cli --target TS_1 --horizon 5` output is unchanged on a machine with and
+  without optional deps (compare captured output in tests where feasible).
+- Forecast-display tests (`tests/core_unit/test_forecast_display.py`) pass unchanged.
+
+#### Task U18.1d — Extract a shared forecast service; migrate the Tkinter worker
+
+**What:** Create `dynamix/forecast_service.py`: one function that takes (history,
+series list, horizon) and returns structured result rows by iterating the registry —
+i.e., the *logic* currently embedded in `gui.py::_run_forecast_worker` (lines
+~669–860). The Tkinter worker then shrinks to: call service → hand rows to widgets →
+post progress events. `run_cli` may adopt the same service where it reduces code.
+
+**Why:** `_run_forecast_worker` is the repo's worst hotspot (cyclomatic 77) because it
+does model wiring + formatting + widget updates in one method. The registry removes
+the wiring; this task removes the formatting; only widget code remains — and widget
+code in the legacy GUI is deliberately left untouched (it is frozen legacy; polishing
+it is review burden with no payoff).
+
+**Acceptance criteria:**
+- `_run_forecast_worker` cyclomatic complexity < 40 (measured; U17.1 grandfather entry
+  updated downward).
+- GUI display tests (`test_gui_forecast_display.py`) pass unchanged.
+- The service is pure w.r.t. UI (no tkinter imports) and unit-tested with `FakeFamily`.
+
+#### Task U18.2 — Split `stat.py` along its existing seams *(supersedes U17.3)*
+
+**What:** `src/dynamix/stat.py` (1379 lines, 61 symbols) becomes three modules along
+boundaries that already exist in the file:
+- `dynamix/backtest.py` — the rolling-origin loop (`run_statistics` and its step
+  helpers); while moving, extract 2–3 pure helpers (per-step scoring, per-model
+  accumulation — the pieces U5.6 and U13.2 will touch anyway);
+- `dynamix/overlay_report.py` — `print_overlay_witness_report` (cyclo 35) and overlay
+  bookkeeping;
+- `dynamix/statgrid_export.py` — the exporter class with `SCHEMA_VERSION`,
+  `schema.json`/manifest/shard writing (already fully self-contained).
+
+`dynamix/stat.py` remains as a re-export facade (same pattern as the
+`candidate_grid` extraction) so `dynamix-stat`, `stat.py` shim, tests, and the
+webapp runner keep working untouched.
+
+**Why:** 1379 lines is the single hardest file to review; the three responsibilities
+are already non-overlapping inside it, so the split is a move, not a redesign. It also
+gives U4 (schema work) a small, dedicated home instead of a corner of a giant file.
+
+**Acceptance criteria:**
+- Golden/contract tests pass unchanged; a full `--statgrid-export incremental` run on
+  fixture data produces byte-identical shards + schema.json.
+- `run_statistics` cyclomatic < 40; no new module exceeds ~700 lines.
+- `from dynamix import stat` and all current entrypoints work unchanged (the
+  entrypoint-import test enforces this).
+
+#### Task U18.3 — Single-home the copy-pasted utilities
+
+**What:** Mechanical dedup, one commit per utility:
+- `_is_event_mode()` (4 copies: `data_utils`, `pce_narx`, `plotting`,
+  `candidate_grid`) → keep the `data_utils` implementation, import everywhere else;
+- `_repo_root()` (`data_utils`, `webapp/runner`, …) → one home in `data_utils` (or
+  `constants`), imported elsewhere;
+- `_bootstrap_import_paths()` (4 test files: `test_constants`, `test_data_utils`,
+  `test_integration`, `test_stat_logic`) → one `tests/_bootstrap.py`, imported by all.
+
+**Why:** Four copies of a 3-line function is pure reviewer noise and a drift seed;
+this is an hour of mechanical work that permanently ends "which copy is
+authoritative?".
+
+**Acceptance criteria:**
+- `search: def _is_event_mode` returns exactly one hit in application code; same for
+  the other two.
+- Full suite green; no behavior change.
+- ruff F401 (unused imports) clean after the sweep.
+
+#### Task U18.4 — Split `opt_strategies.py` by strategy *(opportunistic — ride U6)*
+
+**What:** When U6 touches strategies, split `opt/opt_strategies.py` (895 lines) into
+`opt/strategies/{greedy,milp,bandit,evo}.py` plus `opt/economics.py`
+(`compute_portfolio_economics`, `random_ticket_baseline`, ticket sampling);
+`opt_strategies` stays as a re-export facade.
+
+**Why:** Ranked last deliberately: the file is already function-modular, so the pain
+is navigation, not correctness risk — it does not justify its own PR, but it becomes
+nearly free when U6 is editing those functions anyway (extract-on-touch, U17.2).
+
+**Acceptance criteria:**
+- Optimization + determinism test layers pass unchanged (seeded runs bit-identical).
+- Public names still importable from `opt.opt_strategies`.
+- Executed as part of, or immediately after, U6 — not as a standalone campaign.
 
 ---
 
@@ -1364,6 +1557,141 @@ into a number.
 
 ---
 
+### EPIC U19 — Oversight Visualizations (lean) *(new in v2.3)*
+
+**Priority:** P1 · **Type:** analytics / UX · **Status:** Proposed · **Depends on:** per task — U19.2→U1, U19.3→U15, U19.4→U16; U19.5/.6 need only data that exists today
+**Companion doc:** [visualization_guide.md](visualization_guide.md) — plain-language
+explanation of every chart, what it exposes, and how to read it.
+
+**What:** Exactly five charts, each admitted under one strict test: *it must expose
+information that no logged scalar metric can carry.* Every logged metric in this
+project is an aggregate over draws, cells, or time; aggregation destroys four kinds of
+information — **path, place, shape, time** — and the domain's extreme payout skew
+(totals dominated by rare multi-hit events) makes aggregates the least trustworthy
+numbers in the project. Each chart is the anti-aggregation instrument for one specific
+failure mode:
+
+| Chart | Rescues | The scalar it corrects |
+|---|---|---|
+| U19.2 Equity curve + null envelope | path | `edge_eur` can't distinguish steady drift from one lucky spike |
+| U19.3 Empirical vs analytic overlay | place | the fairness p-value says *that* something is off, never *where* |
+| U19.4 Permutation-null histogram | shape | a permutation p-value's reliability depends on the null's (heavy) tail |
+| U19.5 Rolling hit-rate timeline | time | whole-run hit rate hides regime change and mid-run model death |
+| U19.6 Backtest coverage map | failure location | fail-soft design lets a family die silently; counts shrink, nothing shouts |
+
+**Why "lean":** a longer candidate list was triaged against the same test; ball-level
+whisker charts, model×series heatmaps, fold dot plots, and a mission-control dashboard
+were **cut or reduced to logged metrics** because tables carry their content. This
+epic is deliberately not a dashboard program.
+
+> **Comment (architecture):** one pure module + two surfaces, no new dependencies.
+> Chart builders live in `dynamix/viz.py` as pure functions (`DataFrame in → plotly
+> Figure out`, no I/O — plotly is already a core dependency). Consumers: (a) a
+> Streamlit "Insights" page, and (b) a static, self-contained **run report** HTML
+> written to `Output/reports/` per run — an auditable file artifact, consistent with
+> the project's file-contract philosophy, viewable offline without the app. Figure
+> builders are tested on fixtures by asserting figure *data* (trace values), never
+> pixels.
+
+#### Task U19.1 — Viz foundation: pure builders + two surfaces
+
+**What:** Create `dynamix/viz.py` (empty registry of builders + shared styling
+helpers), the run-report writer (assembles available figures into one
+self-contained HTML in `Output/reports/`), and a Streamlit "Insights" page skeleton
+that renders whatever builders have data available.
+
+**Why:** One foundation so each later chart task is: write one builder + one fixture
+test, done. Report and page pick it up automatically.
+
+**Acceptance criteria:**
+- Builders are pure (no file/network I/O, no streamlit imports).
+- Run report is a single self-contained HTML file (no CDN references).
+- Missing data → chart section is skipped with a note, never an error.
+
+#### Task U19.2 — Equity curve inside the null envelope *(data: U1.2)*
+
+**What:** Cumulative net EUR per strategy over EVAL draws, drawn over the p5–p95 band
+of the seeded random-baseline population from U1.2 (the "luck cloud").
+
+**Why:** Rescues **path**. `edge_eur = +40` is identical for "steady accumulation"
+and "one lucky spike on draw 37"; the first is interesting, the second is guaranteed
+noise. Only the trajectory against the luck cloud separates them — it is a visual
+sequential test of the random-walk null.
+
+**Acceptance criteria:**
+- Band computed from the per-draw baseline population (not from summary aggregates).
+- Fixture test: a synthetic "one-spike" series and a synthetic "steady-drift" series
+  produce visibly different trace data (asserted numerically).
+- Renders in both surfaces; guide section 3 linked from the chart title.
+
+#### Task U19.3 — Empirical vs analytic position distributions *(data: U15.2)*
+
+**What:** Seven small-multiple panels: observed value histogram per TS as bars, exact
+order-statistic pmf (U15.2) as a line.
+
+**Why:** Rescues **place**. The chi-square score says a deviation exists; the overlay
+shows whether it is concentrated (potentially exploitable ball bias), smeared
+(multiplicity noise), or edge-of-domain (data-entry artifact) — three different
+actions behind one identical p-value. Doubles as the visual oracle for U14's planted
+bias: the bump must appear at the planted ball.
+
+**Acceptance criteria:**
+- Line is the exact pmf, not a Monte Carlo approximation.
+- Fixture test on U14.1 biased data: the planted ball's bar/line gap is the maximum
+  gap in its panel (asserted on trace data).
+- Panel note reminds the reader of the multiplicity caveat (a few bars always poke
+  out by chance).
+
+#### Task U19.4 — Permutation-null histogram *(data: U16.2)*
+
+**What:** Histogram of edge EUR across the K shuffled-history runs, with a vertical
+marker at the real-history edge and its percentile annotated.
+
+**Why:** Rescues **shape**. The permutation p-value's meaning depends on the null's
+tail: shuffled histories also hit jackpots, so the null pile is heavily
+right-skewed, and "just past p95" inside a long tail is weak evidence. The rank alone
+cannot carry that; the pile can.
+
+**Acceptance criteria:**
+- Marker + percentile match `permutation_p` from the U16.2 summary exactly.
+- Fixture test with a known small null set asserts bin contents and marker position.
+- Chart caption states K (number of shuffles).
+
+#### Task U19.5 — Rolling hit-rate timeline *(data: exists today in backtest rows)*
+
+**What:** Per model family: hit rate over a configurable sliding window of backtest
+steps, recomputed each step.
+
+**Why:** Rescues **time**. Whole-run hit rate assumes exchangeability; the two live
+violations — lottery equipment change and silent mid-run model death under fail-soft
+— both appear as a step change here and as nothing in the aggregate. Distinguishes
+"never good" from "fine until step 214, then died".
+
+**Acceptance criteria:**
+- Window size configurable; default documented.
+- Fixture test: synthetic rows with a planted break at a known step produce a level
+  shift at that step in the trace data.
+- Buildable from any existing StatGrid run (no new pipeline output required).
+
+#### Task U19.6 — Backtest coverage map *(data: exists today in StatGrid rows)*
+
+**What:** Grid of backtest step × (model, series), colored by outcome: hit / miss /
+failed / skipped.
+
+**Why:** Rescues **failure location** — the operational chart. Fail-soft (a design
+virtue everywhere else) lets a model family die mid-run while the run "succeeds";
+counts shrink quietly. The map shows *what died at exactly which step* as an empty
+stripe with a visible onset — a five-minute diagnosis instead of a lost evening, and
+a guard against optimizing over a grid with a hole in it.
+
+**Acceptance criteria:**
+- All four statuses visually distinct; legend fixed.
+- Fixture test: rows with a family absent after step k produce the empty stripe
+  starting at k (asserted on trace data).
+- Insights page shows it first (it is the "was the run healthy?" gate — guide §8).
+
+---
+
 ### EPIC U7 — Documentation Governance *(kept from draft, grounded in found drift)*
 
 **Priority:** P2 · **Type:** docs / test · **Status:** Proposed · **Depends on:** U0 (starts from corrected docs)
@@ -1427,20 +1755,22 @@ science, then hardening. Independent tracks can interleave.
 | 2 | **U3** Health diagnostics | P0 | Unblocks humans *and* U8 reuses its collector; immediately useful on every machine |
 | 3 | **U5** Domain authority + contracts | P0 | Protects the recently-fixed correctness bug before new display surface (U1.5, U3.4) is added |
 | 4 | **U1** Scoreboard uncertainty | P0 | Core honesty upgrade; U2/U6/U14 build on its CI helpers and verdict labels |
-| 5 | **U13** Naive baseline + demo + e2e CI | P1 | Early because its e2e test then guards all remaining work; U14 needs its generator |
-| 6 | **U14** Detector calibration | P0 | The plan's highest-value epic; needs only U13's generator + U1's verdicts; after it, every later result is interpretable |
-| 7 | **U2** Walk-forward | P0 | Needs U1's per-fold CI reporting; feeds U6 |
-| 8 | **U16** Permutation control | P1 | Cheap once U1/U2 exist; completes the control set (tickets, folds, time) |
-| 9 | **U9** Static quality gates (+U17.1 ceiling) | P1 | Cheapest before the M2/M3 code volume lands; the complexity ceiling rides the same PR |
-| 10 | **U15** Analytic null model | P1 | The scientifically correct baseline; also upgrades U14.3's detection oracle |
-| 11 | **U4** Schema consumer-side versioning | P1 | Contract hardening before any future grid change; U10 depends on its fixtures |
-| 12 | **U6** Stability & recommendation | P1 | Consumes U1 + U2 outputs; recommendation gates can now also require beating the analytic null |
-| 13 | **U11** Windows + newer-Python CI | P1 | Do before declaring the GUI production-ready on the target OS |
-| 14 | **U17** Hotspot containment (U17.2–.3) | P2 | `run_statistics` extraction lands right before the epics that touch it are wrapped up |
-| 15 | **U8** Audit pack | P2 | Reuses U3 collector; most valuable once runs get longer (post walk-forward) |
-| 16 | **U12** Progress protocol | P2 | Quality-of-life; regression fixtures already exist from history |
-| 17 | **U10** tools/ status + tests | P2 | Depends on U4 fixtures; includes deleting/labeling the orphan `check_darts_params.py` |
-| 18 | **U7** Docs governance | P2 | Last so the index is written against the post-upgrade doc set (U0 already fixed the acute drift) |
+| 5 | **U9** Static quality gates + **U17** (ceiling + extract-on-touch rule) | P1 | Gates land *before* the refactor wave and the M2/M3 code volume, so every later change is made under lint + a no-growth complexity guarantee |
+| 6 | **U18** first wave (U18.1–.1d, U18.3: registry, caller migrations, utility dedup) | P1 | The registry makes every later model family a one-file change and guts the cyclomatic-77 hotspot; done under fresh U9 gates, locked by existing goldens |
+| 7 | **U13** Naive baseline + demo + e2e CI | P1 | Now a one-file family thanks to U18.1; its e2e test then guards all remaining work; U14 needs its generator |
+| 8 | **U14** Detector calibration | P0 | The plan's highest-value epic; needs only U13's generator + U1's verdicts; after it, every later result is interpretable |
+| 9 | **U2** Walk-forward | P0 | Needs U1's per-fold CI reporting; feeds U6 |
+| 10 | **U16** Permutation control | P1 | Cheap once U1/U2 exist; completes the control set (tickets, folds, time) |
+| 11 | **U15** Analytic null model | P1 | One-file family via U18.1; the scientifically correct baseline; also upgrades U14.3's detection oracle |
+| 12 | **U18** second wave (U18.2: `stat.py` split) | P1 | Lands before U4/U5.6 so schema and diagnostics work happens in the new small `statgrid_export.py`, not a corner of a 1379-line file |
+| 13 | **U4** Schema consumer-side versioning | P1 | Contract hardening before any future grid change; U10 depends on its fixtures |
+| 14 | **U6** Stability & recommendation (+U18.4 strategies split rides along) | P1 | Consumes U1 + U2 outputs; recommendation gates can now also require beating the analytic null |
+| 15 | **U11** Windows + newer-Python CI | P1 | Do before declaring the GUI production-ready on the target OS |
+| 16 | **U8** Audit pack | P2 | Reuses U3 collector; most valuable once runs get longer (post walk-forward) |
+| 17 | **U12** Progress protocol | P2 | Quality-of-life; regression fixtures already exist from history |
+| 18 | **U10** tools/ status + tests | P2 | Depends on U4 fixtures; includes deleting/labeling the orphan `check_darts_params.py` |
+| 19 | **U7** Docs governance | P2 | Last so the index is written against the post-upgrade doc set (U0 already fixed the acute drift) |
+| — | **U19** Oversight visualizations *(phased — no single slot)* | P1 | U19.1 (foundation), .5 and .6 can land **any time** (their data exists today); .2 lands with U1, .3 with U15, .4 with U16 — each chart ships in the same wave as the epic that produces its data |
 
 ---
 
@@ -1455,6 +1785,7 @@ science, then hardening. Independent tracks can interleave.
 - **U14** — Detector calibration: biased generator, null test, detection test, power sweep, instrument stamp *(5 tasks)*
 
 ### P1
+- **U18** — Refactoring program: family registry + 3 caller migrations, `stat.py` split, utility dedup, strategies split *(7 tasks)*
 - **U13** — Naive model family, synthetic data, true e2e CI, control scoreboard row *(5 tasks)*
 - **U9** — Ruff, coverage floor, targeted mypy *(3 tasks)*
 - **U15** — Order-statistic null: fact record, pmf module, analytic family, fairness diagnostic, scoreboard control *(5 tasks)*
@@ -1462,15 +1793,16 @@ science, then hardening. Independent tracks can interleave.
 - **U4** — Schema detection, normalization registry, golden fixtures, merge-tool registry *(4 tasks)*
 - **U6** — Stability score, recommendation gates, seed sensitivity *(3 tasks)*
 - **U11** — Windows CI, Windows-safe stop, 3.13/3.14 canary *(3 tasks)*
+- **U19** — Oversight visualizations: foundation + equity/envelope, distribution overlay, permutation histogram, rolling timeline, coverage map *(6 tasks, phased)*
 
 ### P2
-- **U17** — Complexity ceiling, extract-on-touch rule, `run_statistics` extraction *(3 tasks)*
+- **U17** — Complexity ceiling + extract-on-touch rule *(2 tasks; extraction moved to U18)*
 - **U8** — audit.json, GUI audit surface, runtime trends *(3 tasks)*
 - **U12** — Progress emitter + parser round-trip contract *(2 tasks)*
 - **U10** — tools/ inventory + merge-tool tests *(2 tasks)*
 - **U7** — Docs index, command smoke tests, freshness tripwire *(3 tasks)*
 
-**Total: 18 epics, 67 tasks** — deliberately many small tasks over few large ones.
+**Total: 20 epics, 79 tasks** — deliberately many small tasks over few large ones.
 
 ---
 
@@ -1503,6 +1835,20 @@ enhanced plan makes three kinds of changes:
    detector, validated on planted signals, finds this lottery consistent with a fair
    draw and no strategy that beats the exact null" — is a complete, defensible
    scientific result. That is the strongest form this POC can take.
+5. **Refactoring program (v2.2).** The maintainability audit found the macro-
+   architecture healthy and the debt concentrated: one missing abstraction (the
+   model-family interface, AFI-24) explains the forecast-wiring triplication, the
+   worst complexity hotspot, and the three-edit-site cost of new model families.
+   Epic U18 fixes it as a sequence of small, behavior-preserving, golden-locked moves
+   — registry first (making U13/U15 one-file changes), then the `stat.py` split, then
+   mechanical dedup — under the U9/U17 gates, with explicit ground rules so each
+   commit stays reviewable as a pure move.
+6. **Oversight visualizations (v2.3).** Because the domain's payout skew makes
+   aggregates the least trustworthy numbers in the project, five charts (U19) act as
+   anti-aggregation instruments — one each for path, place, shape, time, and failure
+   location. Everything that a table could carry was cut from the epic; the
+   plain-language rationale and reading instructions live in
+   `docs/visualization_guide.md`.
 
 The architectural constants remain untouched: three decoupled stages, file contracts,
 leakage-safe fitting, fail-soft optional dependencies, and the visible no-edge message.
