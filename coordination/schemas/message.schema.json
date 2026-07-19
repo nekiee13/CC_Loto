@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Coordination message metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["message_id", "created_at_utc", "from_agent", "to_agent", "type", "task", "related_files"],
+  "properties": {
+    "message_id": {"type": "string", "pattern": "^(CX|CC)_[0-9]{8}T[0-9]{6}Z_[a-z0-9]+(?:-[a-z0-9]+)*$"},
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "from_agent": {"enum": ["codex", "claude-code"]},
+    "to_agent": {"enum": ["codex", "claude-code", "both"]},
+    "type": {"enum": ["note", "question", "blocker", "review_request", "acknowledgement", "claim", "status"]},
+    "task": {"type": "string", "minLength": 1},
+    "related_files": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^(?![A-Za-z]:|[\\\\/]|\\.\\.(?:[\\\\/]|$)|.*[\\\\/]\\.\\.(?:[\\\\/]|$)).+"}},
+    "reply_to": {"type": "string", "pattern": "^(CX|CC)_[0-9]{8}T[0-9]{6}Z_[a-z0-9]+(?:-[a-z0-9]+)*$"}
+  },
+  "allOf": [
+    {"if": {"properties": {"from_agent": {"const": "codex"}}}, "then": {"properties": {"message_id": {"pattern": "^CX_"}}}},
+    {"if": {"properties": {"from_agent": {"const": "claude-code"}}}, "then": {"properties": {"message_id": {"pattern": "^CC_"}}}}
+  ]
+}

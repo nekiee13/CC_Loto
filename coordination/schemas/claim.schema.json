@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Coordination claim",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task", "agent", "status", "claimed_at_utc", "last_renewed_at_utc", "expires_at_utc", "anticipated_files", "note"],
+  "properties": {
+    "task": {"type": "string", "minLength": 1},
+    "agent": {"enum": ["codex", "claude-code"]},
+    "status": {"enum": ["active", "released", "expired"]},
+    "claimed_at_utc": {"type": "string", "format": "date-time"},
+    "last_renewed_at_utc": {"type": "string", "format": "date-time"},
+    "expires_at_utc": {"type": "string", "format": "date-time"},
+    "anticipated_files": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^(?![A-Za-z]:|[\\\\/]|\\.\\.(?:[\\\\/]|$)|.*[\\\\/]\\.\\.(?:[\\\\/]|$)).+"}},
+    "note": {"type": "string", "minLength": 1},
+    "released_at_utc": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {"if": {"properties": {"status": {"const": "released"}}}, "then": {"required": ["released_at_utc"]}}
+  ]
+}

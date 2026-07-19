@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Coordination resolution manifest metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["record_type", "created_at_utc", "resolved_by", "authority", "status", "resolved_messages"],
+  "properties": {
+    "record_type": {"const": "coordination_resolution_manifest"},
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "resolved_by": {"enum": ["codex", "claude-code"]},
+    "authority": {"type": "string", "minLength": 1},
+    "status": {"const": "complete"},
+    "resolved_messages": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["message_id", "disposition", "resolution", "confirmation_evidence"],
+        "properties": {
+          "message_id": {"type": "string", "pattern": "^(CX|CC)_[0-9]{8}T[0-9]{6}Z_[a-z0-9]+(?:-[a-z0-9]+)*$"},
+          "disposition": {"enum": ["resolved", "owner-accepted", "deferred-until"]},
+          "resolution": {"type": "string", "minLength": 1},
+          "confirmation_evidence": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "deferred_until": {"type": "string", "minLength": 1},
+          "deferral_owner": {"type": "string", "minLength": 1}
+        },
+        "if": {"properties": {"disposition": {"const": "deferred-until"}}},
+        "then": {"required": ["deferred_until", "deferral_owner"]},
+        "else": {"not": {"anyOf": [{"required": ["deferred_until"]}, {"required": ["deferral_owner"]}]}}
+      }
+    }
+  }
+}

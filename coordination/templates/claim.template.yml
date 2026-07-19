@@ -1,0 +1,9 @@
+task: TASK-ID
+agent: codex
+status: active
+claimed_at_utc: YYYY-MM-DDTHH:MM:SSZ
+last_renewed_at_utc: YYYY-MM-DDTHH:MM:SSZ
+expires_at_utc: YYYY-MM-DDTHH:MM:SSZ
+anticipated_files:
+  - repository/relative/path
+note: Bounded scope and authorization boundary.
