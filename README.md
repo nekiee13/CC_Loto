@@ -10,6 +10,7 @@ DATA.csv ──▶ stat.py ──▶ StatGrid/<run_id>/ ──▶ orchestrator.p
 ```
 
 See [docs/architecture.md](docs/architecture.md) for the full module-by-module breakdown.
+Support and coordination: [support system](support/README.md).
 
 ## Requirements & install
 
