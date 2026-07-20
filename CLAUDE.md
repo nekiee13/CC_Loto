@@ -98,3 +98,58 @@ the repo root will fail to import `dynamix.*` because `src/` won't be on the pat
 
 - `Output/` is generated and gitignored. `DynaMix-python/` is an (empty) placeholder for the
   external DynaMix repo.
+
+## Support system and coordination
+
+This repository carries a support workflow alongside its product code. The summary below is
+deliberately short; the controlling detail lives in [support/README.md](support/README.md),
+[support/PROFILE.md](support/PROFILE.md),
+[coordination/TEAM_PROTOCOL.md](coordination/TEAM_PROTOCOL.md), and the installed tools under
+`tools/support/`. Where this summary and those authorities disagree, the authorities win.
+
+- **Ownership.** Claude Code owns `CLAUDE.md`, `.claude/`, and `CC_` coordination records. Codex
+  owns `AGENTS.md`, `.agents/`, and `CX_` records. Read the other agent's files for context, but
+  never edit, move, delete, archive, or re-index them; request changes through a coordination
+  message. Coordination records without an agent prefix, schemas, templates, validators, the
+  generated board, support records, and handoffs are shared-neutral: claim them before editing and
+  take independent review.
+
+- **Session start.** For support-oriented work read, in order: this file; `support/README.md` and
+  `support/PROFILE.md`; `HANDOFF.md` and its immutable record when one is published;
+  `support/current-status.md` and append-only `support/log.md`; `coordination/BOARD.md`, unresolved
+  `coordination/messages/`, and active `coordination/claims/`; then live Git state - branch, HEAD,
+  upstream, divergence, worktree, and any unfinished risky artifact. Verify that state against the
+  records rather than trusting the records.
+
+- **Coordination lifecycle.** Messages are immutable: correct or answer with a new `reply_to`
+  record, never by rewriting a sent one. Claims reserve anticipated paths and must not overlap.
+  Archive a message only once it is resolved **and** the counterpart has confirmed - silence is not
+  confirmation - moving only `CC_` records under an immutable resolution manifest. Use
+  `python tools/support/agent_coord.py .` to validate, and regenerate the board through the tool
+  rather than hand-editing `coordination/BOARD.md`, which is generated state and never authority.
+  When asked to check messages, inspect and independently verify actionable Claude-addressed
+  messages in the same turn; never acknowledge acceptance without evidence.
+
+- **Validation truth.** Run the support aggregate as
+  `python tools/validate_support.py --root . --native-python <target-interpreter>` and native layers
+  as `python run_tests.py --layer <layer>`. The support tools require PyYAML and jsonschema from a
+  separate support-operator environment; the product requirements environment does not provide them
+  and must not be changed to provide them. Report every check with its literal state from the
+  vocabulary defined in [support/schemas/handoff.schema.json](support/schemas/handoff.schema.json) -
+  that schema and `tools/validate_support.py` are the authority, not any prose copy of the list.
+  `blocked` is a handoff/blocker state, never a check result. An applicable check that could not run
+  fails closed; never relabel a skipped, unavailable, not-run, or excluded check as passed, and
+  never let a zero exit code stand in for a check that did not execute.
+
+- **Safe recovery.** Capture parent, upstream, divergence, clean state, and allowed paths before any
+  reviewed change. Recovery is a new `git revert` of the named commits after reviewer or owner
+  direction; reset, force push, history rewriting, and broad cleanup are prohibited. Preserve
+  unrelated and concurrent work, then re-run the support and applicable native checks and record
+  literal commands and exit codes. A revert that conflicts with later work on the same append-only
+  records requires owner-directed resolution.
+
+- **Owner gates.** Milestone gates are the owner's decision and are never inferred from completed
+  work, elapsed time, or independent review. Publishing files is not milestone acceptance, and a
+  passing support aggregate is evidence about the support system, not about the product test suite.
+  Do not describe the two agent guidance files as synchronized unless both sides are published and
+  each agent has confirmed its own side at the live tip.
