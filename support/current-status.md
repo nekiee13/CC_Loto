@@ -1,44 +1,47 @@
 # CC_Loto current support status
 
-- Observed at UTC: `2026-07-19T23:26:55Z`
-- HEAD: `this status is recorded by evidence commit B, whose parent is Slice 3c content commit A c3d85a1a5d9e81513a1c32184f162dddf85accb4`
-- Upstream relation: `the two local Slice 3c commits remain unpushed; origin/main remains at published Slice 3 tip 7100469757128defd3c437d6f9554744e57a6fa1`
+- Observed at UTC: `2026-07-20T00:22:25Z`
+- HEAD: `this status is recorded by evidence commit B, whose parent is Slice 5 content commit A 6e050bfb14d6c9b039e14df9d4b370ce2e05a7a2`
+- Upstream relation: `the two local Slice 5 commits remain unpushed; origin/main remains at published Slice 3c tip 85f97d0a75a996e83691d2b103d9724cb3136653`
 - Worktree: `clean required at evidence commit B before final-tree validation and reviewer handoff`
-- Support milestone: `M3 authorized Loto publication; Slice 3c navigation packet was independently accepted; local A/B await committed-object review; M4 remains closed`
+- Support milestone: `M3 authorized Loto publication; Codex-owned Slice 5 packet was independently accepted; local A/B await committed-object review; M4 remains closed`
 - Product plan reference: `docs/CC_Loto_ENHANCED_UPGRADE_PLAN.md`
 
 ## Active work
 
-- Slice 3c content commit A creates the target-native [support index](README.md) and adds exactly
-  one navigation line with zero deletions to the root product README.
-- The support index links installed support records and existing Loto authorities while preserving
-  their distinct scopes: the enhanced plan remains owner-designated with its `Proposed` header,
-  earlier TDD progress does not prove enhanced-plan completion, external indexes remain deferred,
-  existing CI is integrate-only, and the release adapter is inventory-only.
-- This status and the appended Slice 3c events form evidence commit B. Neither A nor B is pushed
+- Slice 5 content commit A creates exactly root [AGENTS.md](../AGENTS.md), the Codex-owned guidance
+  for target-native authority, ownership, session startup, validation truth, Git/recovery safety,
+  data/index/hosted/release boundaries, handoff, and owner gates.
+- No `.agents/` tree or governance-transition file was created. Repo-local workflow skills and
+  external indexes remain disabled/deferred under the accepted profile.
+- Claude-owned `CLAUDE.md` was not edited. Its stale opening no-packaging/no-requirements sentence
+  is accepted by Claude as Claude-owned later work; synchronization is pending and the guidance
+  pair is not claimed synchronized.
+- This status and the appended Slice 5 events form evidence commit B. Neither A nor B is pushed
   until Claude independently reviews the committed objects and explicitly authorizes the push.
-- Codex-owned guidance, validators/tests, aggregate validation, and rollback evidence remain later
-  separately reviewed work.
+- The validators/tests slice, aggregate validation, rollback evidence, and M4 remain later separate
+  gates.
 
 ## Messages, claims, and blockers
 
 The installed target-local coordination queue remains empty. Cross-agent implementation review is
 conducted through the Wiki workspace neutral channel. Push is blocked pending Claude's independent
-review of local A and B.
+review of local A and B. Claude-side guidance synchronization is pending until its own later gated
+slice; it does not block review of the accurately disclosed Codex-owned candidate.
 
 ## Validation state
 
-At content commit A `c3d85a1a5d9e81513a1c32184f162dddf85accb4`, `python
-tools/support/agent_coord.py .` exited `0` with 0 errors and 0 warnings; the board stayed current
-and byte-identical. All 21 target-local links in `support/README.md` resolve. A's committed objects
-are exactly the reviewed `e40f8bfe56910ecf7d76e1b048bacb659718b411` and
-`2ffc90e87eec8bcc32c86b1a496185e6126448cc`; root README remains a one-line addition with zero
-deletions.
+At content commit A `6e050bfb14d6c9b039e14df9d4b370ce2e05a7a2`, the sole changed path is
+`AGENTS.md` and its committed Git object is exactly
+`34b7eb93095022bea137e2a0c2313f356bfa0f28`. `python tools/support/agent_coord.py .` exited `0`
+with 0 errors and 0 warnings; the board remained current and byte-identical. Semantic checks found
+no pytest, routine hard-reset, foreign-project/workspace, placeholder, sensitive, or private-path
+content.
 
-Pre-write `git ls-remote --tags origin` exited `0` with no refs. GitHub release inventory is
-truthfully unavailable because `gh` is not installed, so no release-count claim is made. No
-external index/corpus, hosted setting, dependency, product source, data/model/output, tag, or
-release changed.
+Workspace `python scripts/check_guidance_drift.py` exited `0` with 3 existing registered pairs,
+39 anchor rules, and 8 documented differences. That result does not cover or claim synchronization
+of the new Loto pair. The initial read-only validation wrapper parse error ran no check and is
+excluded; the corrected wrapper produced the recorded passes.
 
 With output and model-cache directories redirected outside the repository, target-native commands
 `python run_tests.py --layer core-unit --pattern test*.py --verbosity 1`, `python run_tests.py
@@ -50,17 +53,18 @@ are supplied to the reviewer without another target commit.
 ## Exact next action
 
 - Owner: `claude-code (independent reviewer), then codex (implementer)`
-- Prerequisites: evidence commit B exists; worktree is clean; `B^ == A`; A and B have the exact
-  reviewed path sets; installed coordination/link validation and required native layers reproduce
+- Prerequisites: evidence commit B exists; worktree is clean; `B^ == A`; A/B have exact reviewed
+  scopes/objects; installed coordination, semantic, drift, and native checks reproduce
 - Action: independently review local commits A and B and final-tree evidence, then authorize or
   reject one fast-forward push containing exactly A followed by B
-- Stop condition: any amended/rebased commit, unexpected path, byte mismatch, broken index link,
-  false module/authority state, coordination error, native regression, target drift, or finding
+- Stop condition: amended/rebased commit, unexpected path, byte mismatch, ownership breach, false
+  synchronization claim, unsafe/stale guidance, coordination error, board change, native regression,
+  target drift, or reviewer finding
 
 ## Evidence
 
-- Navigation, local commit, and validation events in [log.md](log.md)
+- Guidance preparation, local commit, and validation events in [log.md](log.md)
+- Codex-owned target guidance in [AGENTS.md](../AGENTS.md)
 - Installed support navigation in [README.md](README.md)
 - Handoff bootstrap state in [HANDOFF.md](../HANDOFF.md)
-- Record classes in [RECORD-KEEPING.md](RECORD-KEEPING.md)
 - Module, sensitivity, native-runner, and recovery authority in [PROFILE.md](PROFILE.md)
