@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 DynaMix Lottery Forecasting System: a three-stage pipeline (forecast → backtest/StatGrid →
-portfolio optimize) over 7 positional lottery series (`TS_1`..`TS_7`). Pure Python, run
-directly from the repo root with `sys.path` bootstrapping; no packaging or `requirements.txt`.
+portfolio optimize) over 7 positional lottery series (`TS_1`..`TS_7`). Pure Python, packaged
+with setuptools as `dynamix-lottery` (`pyproject.toml`, Python `>=3.11`) and normally used as
+an editable install; `requirements.txt` and `requirements.lock` are the dependency authorities.
 The single input is `DATA.csv` at the repo root (`Date,TS_1..TS_7`, one row per draw event).
 
 See [docs/architecture.md](docs/architecture.md) for the full stage-by-stage breakdown,
