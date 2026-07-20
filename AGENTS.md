@@ -83,8 +83,9 @@ python run_tests.py --include-optional
 
 The optional layer and heavy model families are not required unless the task makes them applicable.
 Missing optional dependencies must remain fail-soft where the product contract says so. Report each
-check literally as passed, failed, skipped, unavailable, blocked, unknown, or not run; never relabel
-a missing, timed-out, or excluded check as passed. Redirect output and model-cache paths outside the
+check literally as passed, failed, skipped, not-run, unknown, not-configured, or unavailable;
+`blocked` is a handoff/blocker state, never a check result. Never relabel a missing, timed-out, or
+excluded check as passed. Redirect output and model-cache paths outside the
 repository for support-only validation when practical.
 
 The support operator requires PyYAML and jsonschema. The separately accepted support environment
